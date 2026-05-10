@@ -340,9 +340,7 @@
   </div>
 </header>
 
-<div class="disclaimer">
-  <strong>⚠️ Not financial advice.</strong> This tool aggregates publicly available data and news from Finnhub (which sources from Bloomberg, Reuters, CNBC, MarketWatch, Yahoo Finance, Seeking Alpha, and others) for research only. Stocks shown are surfaced because reporters and analysts are talking about them — that is <em>not</em> a recommendation to buy or sell. Always do your own research and consult a licensed financial advisor before investing.
-</div>
+<div style="color: var(--muted); font-size: 11px; margin: 4px 0 18px;">Research aid · not financial advice · data via Finnhub</div>
 
 <div id="errorBanner" class="error-banner hidden"></div>
 <div id="infoBanner" class="info-banner hidden"></div>
@@ -2359,23 +2357,25 @@ async function loadAll() {
   }
   enrichmentInProgress = false;
 
-  // Diagnostic banner — show per-endpoint stats so we can see what's failing.
+  // Only surface a diagnostic banner if something *actionable* is wrong.
+  // News-sentiment + price-target are premium endpoints (always 403 on free
+  // tier), so failures there are expected and silent. We only alert when a
+  // rating fails to compute or one of the free-tier endpoints fails.
   const rated = Object.values(rowState).filter(r => r.scores.composite !== null).length;
   const totalRows = Object.keys(rowState).length;
-  const fmtStat = (label, s, expectedFail) => {
-    const tone = s.fail === 0 ? "✅" : (expectedFail ? "ℹ️" : "⚠️");
-    return `${tone} <strong>${label}</strong>: ${s.ok} OK / ${s.fail} fail`;
-  };
-  const errSnippet = (kind) => sampleErrors[kind] ? ` <span style="opacity:0.7">(${escapeHtml(sampleErrors[kind])})</span>` : "";
-  const diagnostic = `
-    Rated <strong>${rated}/${totalRows}</strong> stocks.<br/>
-    ${fmtStat("Recommendation", stats.rec, false)}${errSnippet("rec")}<br/>
-    ${fmtStat("Metric (P/E, 52W)", stats.metric, false)}${errSnippet("metric")}<br/>
-    ${fmtStat("News-sentiment", stats.sent, true)}${errSnippet("sent")}<br/>
-    ${fmtStat("Price-target", stats.target, true)}${errSnippet("target")}
-    ${stats.sent.fail > 0 || stats.target.fail > 0 ? "<br/><span style='font-size:11px; opacity:0.7;'>ℹ️ News-sentiment and price-target are premium endpoints (free-tier returns 403). The rating still computes from the other three.</span>" : ""}
-  `;
-  showInfo(diagnostic);
+  const unexpectedFail = stats.rec.fail > 0 || stats.metric.fail > 0 || rated < totalRows;
+  if (unexpectedFail) {
+    const fmtStat = (label, s, expectedFail) => {
+      const tone = s.fail === 0 ? "✅" : (expectedFail ? "ℹ️" : "⚠️");
+      return `${tone} <strong>${label}</strong>: ${s.ok} OK / ${s.fail} fail`;
+    };
+    const errSnippet = (kind) => sampleErrors[kind] ? ` <span style="opacity:0.7">(${escapeHtml(sampleErrors[kind])})</span>` : "";
+    showInfo(`
+      Rated <strong>${rated}/${totalRows}</strong> stocks.<br/>
+      ${fmtStat("Recommendation", stats.rec, false)}${errSnippet("rec")}<br/>
+      ${fmtStat("Metric (P/E, 52W)", stats.metric, false)}${errSnippet("metric")}
+    `);
+  }
 
   // Pass C: deferred — earnings + insider for flags and breakdown drawer
   setProgress(done, totalCalls, "Fetching earnings & insider data…");
