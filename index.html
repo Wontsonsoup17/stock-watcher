@@ -690,7 +690,46 @@ function loadCache() {
   try { return JSON.parse(localStorage.getItem(LS.cache) || "{}"); }
   catch (_) { return {}; }
 }
-function saveCache(c) { localStorage.setItem(LS.cache, JSON.stringify(c)); }
+
+// Tolerant cache writer. iOS Safari has a 5MB localStorage quota that fills
+// up fast with news data; when we hit it, evict the oldest 60% of entries
+// and retry. If still failing, silently no-op so the underlying fetch isn't
+// broken just because we couldn't cache its response.
+function saveCache(c) {
+  try {
+    localStorage.setItem(LS.cache, JSON.stringify(c));
+    return true;
+  } catch (e) {
+    const isQuota = e && (e.name === "QuotaExceededError" || /quota/i.test(e.message || "") || /storage/i.test(e.message || ""));
+    if (!isQuota) { console.warn("[StockWatcher] cache save failed:", e); return false; }
+    // Evict oldest 60% of entries by timestamp
+    try {
+      const entries = [];
+      for (const sym of Object.keys(c)) {
+        for (const kind of Object.keys(c[sym])) {
+          entries.push({ sym, kind, t: (c[sym][kind] && c[sym][kind].t) || 0 });
+        }
+      }
+      entries.sort((a, b) => a.t - b.t);
+      const cutoff = Math.floor(entries.length * 0.6);
+      for (let i = 0; i < cutoff; i++) {
+        const ev = entries[i];
+        if (c[ev.sym]) {
+          delete c[ev.sym][ev.kind];
+          if (!Object.keys(c[ev.sym]).length) delete c[ev.sym];
+        }
+      }
+      localStorage.setItem(LS.cache, JSON.stringify(c));
+      console.warn("[StockWatcher] localStorage was full — evicted " + cutoff + " old cache entries");
+      return true;
+    } catch (e2) {
+      // Eviction or retry failed — wipe the cache entirely as a last resort.
+      try { localStorage.removeItem(LS.cache); } catch (_) {}
+      console.warn("[StockWatcher] localStorage save still failing — cache wiped:", e2);
+      return false;
+    }
+  }
+}
 
 function getCached(key, kind, ttl) {
   const c = loadCache();
@@ -703,6 +742,7 @@ function setCached(key, kind, v) {
   if (!c[key]) c[key] = {};
   c[key][kind] = { v, t: Date.now() };
   saveCache(c);
+  // saveCache is now no-throw — failure just means we skip caching this entry.
 }
 
 // =========================================================================
@@ -740,13 +780,28 @@ async function fetchMarketNews(category) {
   return data;
 }
 
+// Trim a news item to only the fields the UI uses — drops `summary` (often
+// the longest field, ~500-2000 chars per item) so the cache fits in iOS
+// Safari's 5MB localStorage budget.
+function trimNewsItem(it) {
+  return {
+    headline: it.headline,
+    url: it.url,
+    datetime: it.datetime,
+    source: it.source,
+    related: it.related,
+    image: it.image,
+    category: it.category,
+  };
+}
+
 async function fetchCompanyNews(symbol, fromStr, toStr) {
   const cacheKey = symbol + "_" + fromStr;
   const cached = getCached(cacheKey, "cnews", NEWS_TTL_MS);
   if (cached) return cached;
   try {
     const data = await throttledFetch(fhUrl("/company-news", { symbol, from: fromStr, to: toStr }));
-    const items = Array.isArray(data) ? data : [];
+    const items = Array.isArray(data) ? data.map(trimNewsItem) : [];
     setCached(cacheKey, "cnews", items);
     return items;
   } catch (e) { return []; }
