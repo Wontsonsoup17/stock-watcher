@@ -1273,9 +1273,15 @@ function renderMeter(scores, opts = {}) {
   const compact = !!opts.compact;
   const sym = opts.dataSym || "";
   if (score === null || score === undefined) {
-    return `<div class="meter ${compact ? "compact" : ""} meter-cell" data-sym="${escapeHtml(sym)}" title="No composite data — at least one of analyst / momentum / value / sentiment is required.">
+    const loading = enrichmentInProgress;
+    const lbl = loading ? "Loading…" : tier.label;
+    const lblColor = loading ? "var(--accent)" : tier.color;
+    const titleText = loading
+      ? "Rating data still loading — analyst, momentum, value, and sentiment fetches are in flight."
+      : "No composite data — at least one of analyst / momentum / value / sentiment is required.";
+    return `<div class="meter ${compact ? "compact" : ""} meter-cell" data-sym="${escapeHtml(sym)}" title="${titleText}">
       <div class="meter-bar is-na"></div>
-      <div class="meter-label"><span class="tier" style="color:${tier.color}">${tier.label}</span><span class="conf">—</span></div>
+      <div class="meter-label"><span class="tier" style="color:${lblColor}">${lbl}</span><span class="conf">${loading ? "…" : "—"}</span></div>
     </div>`;
   }
   const pct = Math.max(0, Math.min(100, score));
@@ -1426,6 +1432,7 @@ let newsTickerFilter = ""; // ticker filter
 let topicFilter = "";    // topic filter for news ("" = all)
 let holdingsOnly = false; // news feed: show only articles mentioning holdings
 let prospectTab = "all"; // "all" | "long" | "short" — Top stories tab
+let enrichmentInProgress = false; // true during pass-B (rating data fetch)
 
 // =========================================================================
 // Table rendering
@@ -2226,13 +2233,17 @@ async function loadAll() {
   renderPortfolio();
   renderPortfolioNews();
 
-  // ----- Step 4: enrich each ticker -----
-  // quote + rec + metric + sent + target + profile + earnings + insider = 8 calls
+  // ----- Step 4: enrich each ticker (three passes) -----
+  // Pass A: quotes (fast — prices + P&L)
+  // Pass B: rating-relevant (rec + metric + sent + target + profile = 5 calls)
+  // Pass C: deferred (earnings + insider = 2 calls; for flags + drawer detail)
+  // Total per ticker: 8 calls. Splitting passes lets the rating UI populate
+  // before the slower flag data, which is critical on mobile/cellular.
   const totalCalls = merged.length * 8;
   let done = 1; // already did news fetch
-  setProgress(done, totalCalls, "Fetching live quotes…");
 
-  // Pass A: quotes (fast; user sees prices + portfolio P&L first)
+  // Pass A: quotes
+  setProgress(done, totalCalls, "Fetching live quotes…");
   for (const m of merged) {
     try {
       const q = await fetchQuote(m.sym);
@@ -2244,22 +2255,21 @@ async function loadAll() {
     renderPortfolio();
   }
 
-  // Pass B: enrichment per ticker
+  // Pass B: rating-relevant enrichment — what the meter and fit scores depend on
+  enrichmentInProgress = true;
+  rerenderTable(); // re-render so meters show "Loading…"
   for (const m of merged) {
-    setProgress(done, totalCalls, `Enriching ${m.sym}…`);
+    setProgress(done, totalCalls, `Rating ${m.sym}…`);
     try {
-      const [rec, metric, sent, target, profile, earnings, insider] = await Promise.all([
+      const [rec, metric, sent, target, profile] = await Promise.all([
         fetchRecommendation(m.sym).catch(() => null),
         fetchMetric(m.sym).catch(() => null),
         fetchNewsSentiment(m.sym),
         fetchPriceTarget(m.sym),
         m.name ? Promise.resolve(null) : fetchProfile(m.sym),
-        fetchEarningsCalendar(m.sym),
-        fetchInsiderTransactions(m.sym),
       ]);
       const row = rowState[m.sym];
       row.rec = rec; row.metric = metric; row.sent = sent; row.target = target;
-      row.earnings = earnings; row.insider = insider;
       if (profile && profile.name && !row.name) row.name = profile.name;
       row.scores.analyst = scoreAnalyst(rec);
       row.scores.momentum = scoreMomentum(row.quote, metric);
@@ -2270,10 +2280,34 @@ async function loadAll() {
     } catch (e) {
       if (!firstError) firstError = e;
     }
-    done += 7;
+    done += 5;
     setProgress(done, totalCalls);
     rerenderTable();
     renderPortfolio();
+  }
+  enrichmentInProgress = false;
+
+  // Diagnostic: how many stocks ended up with a usable rating?
+  const rated = Object.values(rowState).filter(r => r.scores.composite !== null).length;
+  const totalRows = Object.keys(rowState).length;
+  if (rated < totalRows) {
+    showInfo(`⚠️ Rated <strong>${rated}/${totalRows}</strong> stocks. The rest had no analyst / metric / sentiment data — usually a Finnhub free-tier rate limit or transient error. Hit Refresh to retry.`);
+  }
+
+  // Pass C: deferred — earnings + insider for flags and breakdown drawer
+  setProgress(done, totalCalls, "Fetching earnings & insider data…");
+  for (const m of merged) {
+    try {
+      const [earnings, insider] = await Promise.all([
+        fetchEarningsCalendar(m.sym),
+        fetchInsiderTransactions(m.sym),
+      ]);
+      rowState[m.sym].earnings = earnings;
+      rowState[m.sym].insider = insider;
+    } catch (e) {}
+    done += 2;
+    setProgress(done, totalCalls);
+    rerenderTable();
   }
 
   $("loadingPanel").classList.add("hidden");
