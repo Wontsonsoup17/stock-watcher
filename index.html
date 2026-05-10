@@ -2258,16 +2258,35 @@ async function loadAll() {
   // Pass B: rating-relevant enrichment — what the meter and fit scores depend on
   enrichmentInProgress = true;
   rerenderTable(); // re-render so meters show "Loading…"
+  // Per-endpoint success/fail counters for diagnostic banner
+  const stats = { rec: { ok: 0, fail: 0 }, metric: { ok: 0, fail: 0 }, sent: { ok: 0, fail: 0 }, target: { ok: 0, fail: 0 } };
+  const sampleErrors = { rec: null, metric: null, sent: null, target: null };
+  const recordResult = (kind, val, errOrNull) => {
+    if (val !== null && val !== undefined && (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0)) {
+      stats[kind].ok++;
+    } else {
+      stats[kind].fail++;
+      if (!sampleErrors[kind] && errOrNull) sampleErrors[kind] = errOrNull;
+    }
+  };
   for (const m of merged) {
     setProgress(done, totalCalls, `Rating ${m.sym}…`);
+    let rec = null, metric = null, sent = null, target = null, profile = null;
+    let recErr = null, metricErr = null, sentErr = null, targetErr = null;
     try {
-      const [rec, metric, sent, target, profile] = await Promise.all([
-        fetchRecommendation(m.sym).catch(() => null),
-        fetchMetric(m.sym).catch(() => null),
-        fetchNewsSentiment(m.sym),
-        fetchPriceTarget(m.sym),
+      [rec, metric, sent, target, profile] = await Promise.all([
+        fetchRecommendation(m.sym).catch(e => { recErr = e.message; return null; }),
+        fetchMetric(m.sym).catch(e => { metricErr = e.message; return null; }),
+        fetchNewsSentiment(m.sym).catch(e => { sentErr = e.message; return null; }),
+        fetchPriceTarget(m.sym).catch(e => { targetErr = e.message; return null; }),
         m.name ? Promise.resolve(null) : fetchProfile(m.sym),
       ]);
+    } catch (e) { if (!firstError) firstError = e; }
+    recordResult("rec", rec, recErr);
+    recordResult("metric", metric, metricErr);
+    recordResult("sent", sent, sentErr);
+    recordResult("target", target, targetErr);
+    try {
       const row = rowState[m.sym];
       row.rec = rec; row.metric = metric; row.sent = sent; row.target = target;
       if (profile && profile.name && !row.name) row.name = profile.name;
@@ -2277,9 +2296,7 @@ async function loadAll() {
       row.scores.sentiment = scoreSentiment(sent);
       row.scores.composite = compositeScore(row.scores);
       row.targetUpside = targetUpside(row.quote, target);
-    } catch (e) {
-      if (!firstError) firstError = e;
-    }
+    } catch (e) { if (!firstError) firstError = e; }
     done += 5;
     setProgress(done, totalCalls);
     rerenderTable();
@@ -2287,12 +2304,23 @@ async function loadAll() {
   }
   enrichmentInProgress = false;
 
-  // Diagnostic: how many stocks ended up with a usable rating?
+  // Diagnostic banner — show per-endpoint stats so we can see what's failing.
   const rated = Object.values(rowState).filter(r => r.scores.composite !== null).length;
   const totalRows = Object.keys(rowState).length;
-  if (rated < totalRows) {
-    showInfo(`⚠️ Rated <strong>${rated}/${totalRows}</strong> stocks. The rest had no analyst / metric / sentiment data — usually a Finnhub free-tier rate limit or transient error. Hit Refresh to retry.`);
-  }
+  const fmtStat = (label, s, expectedFail) => {
+    const tone = s.fail === 0 ? "✅" : (expectedFail ? "ℹ️" : "⚠️");
+    return `${tone} <strong>${label}</strong>: ${s.ok} OK / ${s.fail} fail`;
+  };
+  const errSnippet = (kind) => sampleErrors[kind] ? ` <span style="opacity:0.7">(${escapeHtml(sampleErrors[kind])})</span>` : "";
+  const diagnostic = `
+    Rated <strong>${rated}/${totalRows}</strong> stocks.<br/>
+    ${fmtStat("Recommendation", stats.rec, false)}${errSnippet("rec")}<br/>
+    ${fmtStat("Metric (P/E, 52W)", stats.metric, false)}${errSnippet("metric")}<br/>
+    ${fmtStat("News-sentiment", stats.sent, true)}${errSnippet("sent")}<br/>
+    ${fmtStat("Price-target", stats.target, true)}${errSnippet("target")}
+    ${stats.sent.fail > 0 || stats.target.fail > 0 ? "<br/><span style='font-size:11px; opacity:0.7;'>ℹ️ News-sentiment and price-target are premium endpoints (free-tier returns 403). The rating still computes from the other three.</span>" : ""}
+  `;
+  showInfo(diagnostic);
 
   // Pass C: deferred — earnings + insider for flags and breakdown drawer
   setProgress(done, totalCalls, "Fetching earnings & insider data…");
