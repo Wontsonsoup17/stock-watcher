@@ -1,0 +1,2455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stock Watcher</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #131a26;
+    --panel-2: #1a2333;
+    --border: #232e42;
+    --text: #e6edf7;
+    --muted: #8a96ab;
+    --accent: #4f8cff;
+    --good: #2ec27e;
+    --bad: #f23f5e;
+    --warn: #f5b342;
+    --pick: #ffd35a;
+    --buzz: #b388ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; font-size: 14px; line-height: 1.45; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
+  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  header h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+  header .meta { color: var(--muted); font-size: 13px; flex: 1; }
+  header .actions { display: flex; gap: 8px; }
+  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.15s; }
+  button:hover { background: var(--border); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  button.primary:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .disclaimer { background: rgba(245, 179, 66, 0.08); border: 1px solid rgba(245, 179, 66, 0.3); color: var(--warn); padding: 10px 14px; border-radius: 8px; margin: 12px 0 24px; font-size: 13px; }
+  .disclaimer strong { color: var(--text); }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+  .panel h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .panel .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+
+  /* Setup */
+  #setup label { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 6px; }
+  #setup input, #setup textarea, #setup select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-family: inherit; font-size: 14px; }
+  #setup textarea { min-height: 70px; resize: vertical; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: 13px; }
+  #setup .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  #setup .hint a { color: var(--accent); }
+  #setup .row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  #setup .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { #setup .grid2 { grid-template-columns: 1fr; } }
+
+  /* Story-group cards (news-first primary view) */
+  .stories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .story-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; position: relative; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.15s; }
+  .story-card:hover { border-color: var(--accent); }
+  .story-card.featured { background: linear-gradient(135deg, var(--panel-2), var(--panel)); border-color: var(--buzz); }
+  .story-card.featured::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--buzz); border-radius: 3px 0 0 3px; }
+  .story-card .rank { position: absolute; top: 12px; right: 16px; font-size: 11px; color: var(--buzz); font-weight: 700; }
+  .story-card .head-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .story-card .ticker { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
+  .story-card .company { font-size: 13px; color: var(--muted); }
+  .story-card .price-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .story-card .price-row .price { color: var(--text); font-weight: 600; }
+  .story-card .stats-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .story-card .composite-pill { display: inline-block; background: var(--pick); color: #1a1a1a; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+  .buzz-pill { display: inline-block; background: rgba(179, 136, 255, 0.18); color: var(--buzz); padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+  .source-count-pill { display: inline-block; background: rgba(46, 194, 126, 0.15); color: var(--good); padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+  .source-list { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
+  .source-list .source-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text); }
+  .source-list .source-badge .src-count { color: var(--muted); font-size: 10px; }
+  .article-list { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+  .article-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.4; }
+  .article-row .src-tag { flex-shrink: 0; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; font-size: 10px; color: var(--muted); white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+  .article-row .art-headline { flex: 1; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .article-row .art-headline a { color: inherit; }
+  .article-row .art-headline a:hover { color: var(--accent); }
+  .article-row .art-time { flex-shrink: 0; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .article-list.collapsed .article-row:nth-child(n+4) { display: none; }
+  .show-more-btn { background: none; border: none; color: var(--accent); font-size: 12px; padding: 4px 0; cursor: pointer; text-align: left; }
+  .show-more-btn:hover { text-decoration: underline; background: none; }
+
+  /* Progress */
+  .progress-wrap { display: flex; align-items: center; gap: 12px; }
+  .progress { flex: 1; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--accent); width: 0; transition: width 0.3s; }
+  .progress-text { font-size: 12px; color: var(--muted); min-width: 100px; text-align: right; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 10px 8px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { color: var(--text); }
+  thead th.sorted-asc::after { content: " ▲"; color: var(--accent); }
+  thead th.sorted-desc::after { content: " ▼"; color: var(--accent); }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: rgba(79, 140, 255, 0.04); }
+  tbody td { padding: 12px 8px; font-size: 13px; vertical-align: middle; }
+  td.ticker { font-weight: 700; letter-spacing: 0.02em; }
+  td.company { color: var(--muted); font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.num { font-family: ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
+  td.right { text-align: right; }
+  td.center { text-align: center; }
+  .pos { color: var(--good); }
+  .neg { color: var(--bad); }
+  .pill { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pill.score-hi { background: rgba(46, 194, 126, 0.15); color: var(--good); }
+  .pill.score-mid { background: rgba(245, 179, 66, 0.15); color: var(--warn); }
+  .pill.score-lo { background: rgba(242, 63, 94, 0.15); color: var(--bad); }
+  .pill.score-na { background: var(--panel-2); color: var(--muted); }
+  .composite-cell { font-weight: 700; font-size: 14px; padding: 4px 10px; border-radius: 6px; }
+  tr.is-trending td.ticker::before { content: "📰 "; color: var(--buzz); }
+  tr.is-watch td.ticker::after { content: " ★"; color: var(--pick); }
+
+  .source-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; background: var(--panel-2); color: var(--muted); }
+  .source-tag.discovery { color: var(--buzz); background: rgba(179, 136, 255, 0.12); }
+  .source-tag.watchlist { color: var(--pick); background: rgba(255, 211, 90, 0.12); }
+  .source-tag.both { color: var(--good); background: rgba(46, 194, 126, 0.12); }
+  .source-tag.fallback { color: var(--muted); background: var(--panel-2); }
+
+  .range-bar { width: 70px; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; position: relative; display: inline-block; vertical-align: middle; }
+  .range-fill { height: 100%; background: linear-gradient(90deg, var(--bad), var(--warn), var(--good)); border-radius: 3px; }
+  .range-marker { position: absolute; top: -2px; width: 2px; height: 10px; background: var(--text); border-radius: 1px; }
+
+  /* News feed */
+  .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .news-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.15s, border-color 0.15s; }
+  .news-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .news-card .news-img { width: 100%; height: 140px; object-fit: cover; background: var(--bg); display: block; }
+  .news-card .news-img-fallback { width: 100%; height: 140px; background: linear-gradient(135deg, var(--panel-2), var(--bg)); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 32px; }
+  .news-card .news-body { padding: 14px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .news-card .news-headline { font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .news-card .news-headline a { color: inherit; }
+  .news-card .news-meta { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .news-card .news-tickers { display: flex; gap: 4px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+  .ticker-chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; background: rgba(79, 140, 255, 0.12); color: var(--accent); cursor: pointer; }
+  .ticker-chip:hover { background: rgba(79, 140, 255, 0.22); }
+
+  .filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .filter-bar input { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-family: inherit; flex: 1; min-width: 200px; }
+  .filter-bar .filter-chip { padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--panel-2); color: var(--muted); cursor: pointer; border: 1px solid var(--border); }
+  .filter-bar .filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  .status-row { font-size: 12px; color: var(--muted); padding: 8px 4px; }
+  .footer-note { color: var(--muted); font-size: 12px; margin-top: 24px; line-height: 1.6; }
+  .footer-note code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  .hidden { display: none !important; }
+  .error-banner { background: rgba(242, 63, 94, 0.08); border: 1px solid rgba(242, 63, 94, 0.3); color: var(--bad); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+  .info-banner { background: rgba(79, 140, 255, 0.08); border: 1px solid rgba(79, 140, 255, 0.3); color: var(--accent); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+  .empty-msg { text-align: center; color: var(--muted); padding: 24px; font-size: 13px; }
+
+  /* Buy/Sell meter */
+  .meter { display: inline-flex; flex-direction: column; gap: 3px; min-width: 120px; }
+  .meter-bar { position: relative; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #d22f48 0%, #f23f5e 22%, #f5b342 50%, #2ec27e 78%, #1faa66 100%); overflow: visible; }
+  .meter-bar.is-na { background: var(--panel-2); }
+  .meter-needle { position: absolute; top: -3px; width: 3px; height: 14px; background: var(--text); border-radius: 2px; box-shadow: 0 0 0 1px var(--bg); }
+  .meter-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+  .meter-label .tier { font-weight: 700; letter-spacing: 0.02em; }
+  .meter-label .conf { color: var(--muted); font-size: 10px; }
+  .meter.compact { min-width: 90px; }
+  .meter.compact .meter-bar { height: 6px; }
+  .meter.compact .meter-needle { top: -2px; height: 10px; width: 2px; }
+  .meter-cell { cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.15s; }
+  .meter-cell:hover { background: rgba(79, 140, 255, 0.06); }
+
+  /* Override flags */
+  .flag { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+  .flag.alert { background: rgba(242, 63, 94, 0.18); color: var(--bad); }
+  .flag.warn { background: rgba(245, 179, 66, 0.16); color: var(--warn); }
+  .flag.info { background: rgba(46, 194, 126, 0.14); color: var(--good); }
+  .flags-stack { display: flex; flex-wrap: wrap; gap: 3px; }
+
+  /* Detail drawer (rating breakdown / decision journal entry) */
+  .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .drawer { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; }
+  .drawer h3 { margin: 0 0 4px; font-size: 18px; }
+  .drawer .drawer-sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .drawer .close-x { float: right; background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; padding: 0; line-height: 1; }
+  .drawer .close-x:hover { color: var(--text); }
+  .breakdown-row { display: grid; grid-template-columns: 90px 1fr 50px 50px; gap: 10px; align-items: center; padding: 6px 0; }
+  .breakdown-row .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .breakdown-row .bar-wrap { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+  .breakdown-row .bar-fill { height: 100%; background: linear-gradient(90deg, var(--bad), var(--warn), var(--good)); border-radius: 4px; transition: width 0.3s; }
+  .breakdown-row .score { font-family: ui-monospace, monospace; text-align: right; font-weight: 700; }
+  .breakdown-row .weight { color: var(--muted); font-size: 11px; text-align: right; }
+  .breakdown-explain { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 13px; line-height: 1.5; }
+  .drawer-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .drawer-section h4 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .drawer-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-grid .stat { background: var(--panel-2); border-radius: 6px; padding: 8px 12px; }
+  .stat-grid .stat .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-grid .stat .stat-value { font-size: 15px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* Portfolio panel */
+  .portfolio-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .portfolio-summary .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .portfolio-summary .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .portfolio-summary .stat .val { font-size: 18px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .portfolio-summary .stat.pos .val { color: var(--good); }
+  .portfolio-summary .stat.neg .val { color: var(--bad); }
+  .holdings-table { width: 100%; border-collapse: collapse; }
+  .holdings-table th, .holdings-table td { padding: 8px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .holdings-table th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .holdings-table td.num { font-family: ui-monospace, monospace; text-align: right; font-variant-numeric: tabular-nums; }
+  .holdings-empty { color: var(--muted); padding: 14px; text-align: center; font-size: 13px; background: var(--panel-2); border-radius: 8px; }
+  .pf-strip { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; flex-wrap: wrap; }
+  .pf-toggle { padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--panel-2); color: var(--muted); cursor: pointer; border: 1px solid var(--border); }
+  .pf-toggle.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* Holdings editor (Settings) */
+  .holding-editor { margin-top: 8px; }
+  .holding-row { display: grid; grid-template-columns: 90px 80px 100px 110px 28px; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .holding-row input { padding: 6px 8px !important; font-size: 13px !important; }
+  .holding-row .del-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--bad); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 14px; line-height: 1; }
+  .holding-row .del-btn:hover { background: rgba(242, 63, 94, 0.15); }
+  .holding-head { display: grid; grid-template-columns: 90px 80px 100px 110px 28px; gap: 6px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+
+  /* Topic chips on news */
+  .topic-chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; background: var(--panel-2); }
+  .topic-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .topic-filter { padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--panel-2); color: var(--muted); cursor: pointer; border: 1px solid var(--border); }
+  .topic-filter.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* Decision journal */
+  .journal-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+  .journal-entry { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .journal-entry .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+  .journal-entry .head .sym { font-weight: 700; }
+  .journal-entry .head .dir { padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .journal-entry .head .dir.buy { background: rgba(46, 194, 126, 0.15); color: var(--good); }
+  .journal-entry .head .dir.sell { background: rgba(242, 63, 94, 0.15); color: var(--bad); }
+  .journal-entry .head .dir.hold { background: rgba(245, 179, 66, 0.15); color: var(--warn); }
+  .journal-entry .head .when { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .journal-entry .meta { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .journal-entry .reason { font-size: 13px; line-height: 1.5; }
+  .journal-entry .del-entry { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 6px; }
+  .journal-entry .del-entry:hover { color: var(--bad); }
+
+  /* Login gate — full-screen lock until valid credentials decrypt the API key */
+  .gate-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .gate-card { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
+  .gate-card h2 { margin: 0 0 6px; font-size: 22px; }
+  .gate-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .gate-card label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
+  .gate-card input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-family: inherit; font-size: 14px; }
+  .gate-card input:focus { outline: none; border-color: var(--accent); }
+  .gate-card .gate-actions { margin-top: 18px; }
+  .gate-card .gate-error { color: var(--bad); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .gate-card .gate-status { color: var(--muted); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .gate-card button.primary { width: 100%; padding: 10px; font-size: 14px; }
+  body.locked .wrap { display: none; }
+
+  /* Prospect tabs (Top stories) */
+  .tab-strip { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 4px 0 14px; }
+  .tab-btn { background: none; border: none; color: var(--muted); padding: 8px 14px; cursor: pointer; font-size: 13px; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; }
+  .tab-btn:hover { color: var(--text); background: none; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn .tab-count { color: var(--muted); font-size: 11px; font-weight: 500; margin-left: 4px; }
+  .tab-btn.active .tab-count { color: var(--accent); }
+  .tab-desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+  .fit-pill { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+  .fit-pill.long { background: rgba(46, 194, 126, 0.15); color: var(--good); }
+  .fit-pill.short { background: rgba(245, 179, 66, 0.16); color: var(--warn); }
+  .fit-pill.weak { background: var(--panel-2); color: var(--muted); }
+
+  /* Earnings badge in detail */
+  .earn-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; font-size: 12px; }
+  .earn-row .when { color: var(--text); font-weight: 600; }
+  .earn-row .delta { padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  .earn-row .delta.beat { background: rgba(46, 194, 126, 0.15); color: var(--good); }
+  .earn-row .delta.miss { background: rgba(242, 63, 94, 0.15); color: var(--bad); }
+  .earn-row .delta.even { background: var(--panel-2); color: var(--muted); }
+</style>
+</head>
+<body class="locked">
+
+<!-- Login gate -->
+<div id="loginGate" class="gate-overlay">
+  <div class="gate-card">
+    <h2>📈 Stock Watcher</h2>
+    <div class="sub">Locked. Enter your username and password to unlock the dashboard.</div>
+    <form id="loginForm" autocomplete="off">
+      <label for="loginUser">Username</label>
+      <input id="loginUser" type="text" autocomplete="username" autofocus required />
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" required />
+      <div class="gate-actions">
+        <button type="submit" class="primary" id="loginBtn">Unlock</button>
+      </div>
+      <div id="loginError" class="gate-error"></div>
+      <div id="loginStatus" class="gate-status"></div>
+    </form>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header>
+  <h1>📈 Stock Watcher</h1>
+  <div class="meta">
+    <span id="updated">—</span> &nbsp;·&nbsp;
+    <span id="newsCount">0</span> news items scanned ·
+    <span id="tickerCount">0</span> stocks tracked
+  </div>
+  <div class="actions">
+    <button id="journalBtn" title="Decision journal">📓 Journal</button>
+    <button id="settingsBtn">Settings</button>
+    <button id="refreshBtn" class="primary">Refresh</button>
+  </div>
+</header>
+
+<div class="disclaimer">
+  <strong>⚠️ Not financial advice.</strong> This tool aggregates publicly available data and news from Finnhub (which sources from Bloomberg, Reuters, CNBC, MarketWatch, Yahoo Finance, Seeking Alpha, and others) for research only. Stocks shown are surfaced because reporters and analysts are talking about them — that is <em>not</em> a recommendation to buy or sell. Always do your own research and consult a licensed financial advisor before investing.
+</div>
+
+<div id="errorBanner" class="error-banner hidden"></div>
+<div id="infoBanner" class="info-banner hidden"></div>
+
+<!-- Setup / Settings panel -->
+<div id="setup" class="panel hidden">
+  <h2>Settings</h2>
+  <label for="apiKeyInput">Finnhub API Key</label>
+  <input id="apiKeyInput" type="password" placeholder="Paste your free Finnhub API key" />
+  <div class="hint">Get a free key at <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io/register</a> — free tier allows 60 calls/min.</div>
+
+  <div class="grid2" style="margin-top: 14px;">
+    <div>
+      <label for="numTrendingInput">How many trending stocks to track</label>
+      <select id="numTrendingInput">
+        <option value="5">5 — quick scan (~30s load)</option>
+        <option value="10" selected>10 — balanced (~60s load)</option>
+        <option value="15">15 — broad (~90s load)</option>
+        <option value="20">20 — broadest (~2min load)</option>
+      </select>
+      <div class="hint">Top N most-mentioned stocks from market news will be auto-discovered and tracked.</div>
+    </div>
+    <div>
+      <label for="newsCategoryInput">News category</label>
+      <select id="newsCategoryInput">
+        <option value="general" selected>General market news</option>
+        <option value="forex">Forex</option>
+        <option value="crypto">Crypto</option>
+        <option value="merger">Mergers &amp; acquisitions</option>
+      </select>
+      <div class="hint">Where to source the news feed for ticker discovery.</div>
+    </div>
+  </div>
+
+  <label for="tickersInput" style="margin-top: 14px;">Always-track watchlist <span style="text-transform: none; color: var(--muted); font-weight: normal;">(optional, in addition to trending)</span></label>
+  <textarea id="tickersInput" placeholder="Optional. Format: SYMBOL or SYMBOL:Company Name, comma-separated. Leave blank for pure news-driven mode."></textarea>
+  <div class="hint">Stocks you always want tracked even when they're not in the news. Leave blank for pure news-driven mode.</div>
+
+  <label style="margin-top: 18px;">Your holdings <span style="text-transform: none; color: var(--muted); font-weight: normal;">(positions you own — tracked + P&amp;L computed)</span></label>
+  <div class="holding-head">
+    <div>Ticker</div>
+    <div>Shares</div>
+    <div>Cost / share</div>
+    <div>Purchase date</div>
+    <div></div>
+  </div>
+  <div id="holdingEditor" class="holding-editor"></div>
+  <div class="row" style="margin-top: 6px;">
+    <button id="addHoldingBtn">+ Add holding</button>
+  </div>
+  <div class="hint">P&amp;L is computed from current quote × shares − cost basis. Stored only in this browser.</div>
+
+  <div class="row" style="margin-top: 18px;">
+    <button id="saveBtn" class="primary">Save &amp; Refresh</button>
+    <button id="clearWatchBtn">Clear watchlist</button>
+    <button id="cancelSetupBtn">Cancel</button>
+  </div>
+</div>
+
+<!-- Portfolio panel -->
+<div id="portfolioPanel" class="panel hidden">
+  <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+    <h2 style="margin: 0; flex: 1;">💼 Your portfolio</h2>
+    <button id="togglePortfolioBtn" style="padding: 4px 10px; font-size: 12px;">Hide</button>
+  </div>
+  <div class="subtitle">Live P&amp;L on positions you own. Edit holdings in Settings.</div>
+  <div id="portfolioBody">
+    <div id="portfolioSummary" class="portfolio-summary"></div>
+    <div style="overflow-x: auto;">
+      <table class="holdings-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Shares</th>
+            <th>Cost / sh</th>
+            <th>Price</th>
+            <th>Day Δ</th>
+            <th>Mkt value</th>
+            <th>Unrealized $</th>
+            <th>Unrealized %</th>
+            <th>Rating</th>
+          </tr>
+        </thead>
+        <tbody id="portfolioBody2"></tbody>
+      </table>
+    </div>
+    <div id="portfolioEmpty" class="holdings-empty hidden">No holdings yet. Add them in <a href="#" id="openSetupFromEmpty">Settings → Your holdings</a>.</div>
+  </div>
+</div>
+
+<!-- Portfolio news strip -->
+<div id="portfolioNewsPanel" class="panel hidden">
+  <h2>📌 News on your holdings</h2>
+  <div class="subtitle">Headlines mentioning stocks you own — the news that actually matters to your positions.</div>
+  <div id="portfolioNewsGrid" class="news-grid"></div>
+  <div id="portfolioNewsEmpty" class="empty-msg hidden">No recent news mentioning your holdings.</div>
+</div>
+
+<!-- Top stories (news-first primary view) -->
+<div id="trendingPanel" class="panel hidden">
+  <h2>📰 Top stories this week</h2>
+  <div class="subtitle">Trending stocks split into long-term hold candidates vs. short-term catalyst plays. Click any headline to read at the source, or click the meter for a full breakdown.</div>
+  <div class="tab-strip" id="prospectTabStrip">
+    <button class="tab-btn active" data-tab="all">📰 All trending <span class="tab-count" id="tabCountAll"></span></button>
+    <button class="tab-btn" data-tab="long" title="Multi-year holds: strong analyst, value, dividend, steady momentum">🏛️ Long-term <span class="tab-count" id="tabCountLong"></span></button>
+    <button class="tab-btn" data-tab="short" title="Weeks to ~year: momentum, sentiment, news catalyst">⚡ Short-term <span class="tab-count" id="tabCountShort"></span></button>
+  </div>
+  <div class="tab-desc" id="tabDesc"></div>
+  <div id="trendingGrid" class="stories-grid"></div>
+</div>
+
+<!-- Loading progress -->
+<div id="loadingPanel" class="panel hidden">
+  <div class="progress-wrap">
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-text" id="progressText">Loading…</div>
+  </div>
+  <div class="status-row" id="statusText"></div>
+</div>
+
+<!-- Results table (collapsed by default — secondary quant view) -->
+<div id="resultsPanel" class="panel hidden">
+  <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+    <h2 style="margin: 0; flex: 1;">📊 Quant snapshot</h2>
+    <button id="toggleQuantBtn" style="padding: 4px 10px; font-size: 12px;">Show details</button>
+  </div>
+  <div class="subtitle">Price, fundamentals, and composite score for the same trending stocks. Hidden by default — the news view is the primary feature.</div>
+  <div id="quantBody" class="hidden">
+  <div class="subtitle" style="margin-bottom: 0;">📰 = surfaced from news this week · ★ = on your always-track watchlist</div>
+  <div style="overflow-x: auto;">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="symbol">Ticker</th>
+          <th data-sort="name">Company</th>
+          <th data-sort="source" class="center" title="Why this stock is in the list">Source</th>
+          <th data-sort="buzz" class="center" title="Number of news mentions in scanned feed">Buzz</th>
+          <th data-sort="price" class="right">Price</th>
+          <th data-sort="changePct" class="right">Day Δ</th>
+          <th data-sort="pe" class="right">P/E</th>
+          <th data-sort="yield" class="right">Div %</th>
+          <th data-sort="analyst" class="center" title="Analyst consensus score">Analyst</th>
+          <th data-sort="targetUpside" class="right" title="Mean analyst price target vs current">Target ↑</th>
+          <th data-sort="momentum" class="center" title="52-week range position">Momentum</th>
+          <th data-sort="rangePos" class="center" title="52-week range visual">52W</th>
+          <th data-sort="value" class="center" title="P/E + dividend value score">Value</th>
+          <th data-sort="sentiment" class="center" title="News sentiment over last week">Sentiment</th>
+          <th class="center" title="Override flags (earnings, insider activity, range)">Flags</th>
+          <th data-sort="composite" class="center sorted-desc" title="Buy/Sell rating from the composite score">Rating</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+  <div class="footer-note">
+    Click any column header to sort. Composite = 30% analyst · 25% momentum · 25% value · 20% sentiment, weighted only over signals that loaded. Cached for 6 hours; quotes refresh every load.
+  </div>
+  </div>
+</div>
+
+<!-- News feed -->
+<div id="newsPanel" class="panel hidden">
+  <h2>📰 Latest market news</h2>
+  <div class="subtitle">Headlines from across financial press. Click a ticker chip to filter, or click any headline to read at the source.</div>
+  <div class="filter-bar">
+    <input id="newsSearch" type="text" placeholder="Filter headlines (e.g. earnings, fed, AAPL)…" />
+    <span id="newsFilterChip" class="filter-chip hidden"></span>
+    <span id="newsHoldingsToggle" class="filter-chip" title="Show only news mentioning stocks you own">📌 Holdings only</span>
+  </div>
+  <div id="topicFilterRow" class="topic-filter-row"></div>
+  <div id="newsGrid" class="news-grid"></div>
+  <div id="newsEmptyMsg" class="empty-msg hidden">No headlines match your filter.</div>
+  <div class="footer-note">
+    Source: Finnhub aggregated feed. Includes content from major financial outlets. Showing the most recent <span id="newsShown">0</span> of <span id="newsTotal">0</span> items scanned.
+  </div>
+</div>
+
+</div>
+
+<script>
+"use strict";
+
+// =========================================================================
+// Configuration
+// =========================================================================
+
+// Encrypted Finnhub API key. Decrypted on login with the user's username +
+// password via PBKDF2-SHA256 (200k iters) → AES-256-GCM. The blob below is
+// meaningless without the credentials — bots scraping the public source
+// can't extract a usable API key.
+const ENCRYPTED_KEY = {
+  salt: "f0fa5cc076f695331431a37bcc05daa1",
+  iv:   "a4adafa894f24c196094bb60",
+  blob: "43ed1c85d7b710e4e123c36a9db4f18c42fbfc888dafa9ef46f2e73177c67e99a1cb7185511672f3f90517219cd0f9f2da34e991efc00c68",
+};
+
+const WEIGHTS = { analyst: 0.30, momentum: 0.25, value: 0.25, sentiment: 0.20 };
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;     // 6 hours for non-quote data
+const QUOTE_TTL_MS = 5 * 60 * 1000;          // 5 minutes for quotes
+const NEWS_TTL_MS = 15 * 60 * 1000;          // 15 minutes for news
+const REQUEST_INTERVAL_MS = 1100;            // ~55/min, under 60/min limit
+const FINNHUB_BASE = "https://finnhub.io/api/v1";
+const MAX_NEWS_DISPLAY = 60;                 // News cards rendered
+
+// Curated mega-cap candidate pool. We scan each one's /company-news endpoint
+// to discover which stocks are seeing the most news activity this week.
+// /company-news ALWAYS returns ticker-tagged articles aggregated from major
+// financial outlets (Bloomberg, Reuters, CNBC, MarketWatch, Yahoo Finance,
+// Seeking Alpha, etc.) — unlike /news?category=general which is broad market
+// commentary that often lacks per-stock tagging.
+const CANDIDATE_POOL = [
+  { sym: "AAPL",  name: "Apple" },
+  { sym: "MSFT",  name: "Microsoft" },
+  { sym: "GOOGL", name: "Alphabet" },
+  { sym: "NVDA",  name: "NVIDIA" },
+  { sym: "AMZN",  name: "Amazon" },
+  { sym: "META",  name: "Meta Platforms" },
+  { sym: "TSLA",  name: "Tesla" },
+  { sym: "AVGO",  name: "Broadcom" },
+  { sym: "ORCL",  name: "Oracle" },
+  { sym: "NFLX",  name: "Netflix" },
+  { sym: "AMD",   name: "AMD" },
+  { sym: "JPM",   name: "JPMorgan Chase" },
+  { sym: "V",     name: "Visa" },
+  { sym: "MA",    name: "Mastercard" },
+  { sym: "BAC",   name: "Bank of America" },
+  { sym: "GS",    name: "Goldman Sachs" },
+  { sym: "UNH",   name: "UnitedHealth" },
+  { sym: "LLY",   name: "Eli Lilly" },
+  { sym: "JNJ",   name: "Johnson & Johnson" },
+  { sym: "WMT",   name: "Walmart" },
+  { sym: "COST",  name: "Costco" },
+  { sym: "HD",    name: "Home Depot" },
+  { sym: "PG",    name: "Procter & Gamble" },
+  { sym: "XOM",   name: "ExxonMobil" },
+  { sym: "CVX",   name: "Chevron" },
+  { sym: "BA",    name: "Boeing" },
+  { sym: "DIS",   name: "Disney" },
+];
+// Backwards-compat alias — used as fallback if discovery fails entirely.
+const BIG_CAP_FALLBACK = CANDIDATE_POOL.slice(0, 12);
+
+// Higher-volatility pool — biotech, speculative tech, crypto-adjacent, EVs,
+// China ADRs, and other names that move sharply on news. Scanned alongside
+// CANDIDATE_POOL so the short-term tab has tradable-volatility candidates.
+const HIGH_VOL_POOL = [
+  { sym: "PLTR",  name: "Palantir" },
+  { sym: "SMCI",  name: "Super Micro" },
+  { sym: "ARM",   name: "Arm Holdings" },
+  { sym: "MU",    name: "Micron" },
+  { sym: "MRVL",  name: "Marvell" },
+  { sym: "INTC",  name: "Intel" },
+  { sym: "SNOW",  name: "Snowflake" },
+  { sym: "NET",   name: "Cloudflare" },
+  { sym: "AI",    name: "C3.ai" },
+  { sym: "COIN",  name: "Coinbase" },
+  { sym: "MARA",  name: "Marathon Digital" },
+  { sym: "RIOT",  name: "Riot Platforms" },
+  { sym: "MSTR",  name: "MicroStrategy" },
+  { sym: "RIVN",  name: "Rivian" },
+  { sym: "LCID",  name: "Lucid" },
+  { sym: "NIO",   name: "NIO" },
+  { sym: "HOOD",  name: "Robinhood" },
+  { sym: "SOFI",  name: "SoFi" },
+  { sym: "AFRM",  name: "Affirm" },
+  { sym: "UPST",  name: "Upstart" },
+  { sym: "MRNA",  name: "Moderna" },
+  { sym: "BNTX",  name: "BioNTech" },
+  { sym: "CRSP",  name: "CRISPR Therapeutics" },
+  { sym: "BIIB",  name: "Biogen" },
+  { sym: "BABA",  name: "Alibaba" },
+  { sym: "PDD",   name: "PDD Holdings" },
+  { sym: "BIDU",  name: "Baidu" },
+  { sym: "OXY",   name: "Occidental Petroleum" },
+  { sym: "FCX",   name: "Freeport-McMoRan" },
+  { sym: "PATH",  name: "UiPath" },
+];
+
+// Combined discovery pool. Order matters: mega-caps scan first so partial
+// loads still produce sensible "All" rankings.
+const FULL_POOL = CANDIDATE_POOL.concat(HIGH_VOL_POOL);
+
+// =========================================================================
+// Storage
+// =========================================================================
+
+const LS = {
+  apiKey:        "stockwatcher.apiKey",
+  watchlist:     "stockwatcher.watchlist",
+  cache:         "stockwatcher.cache",
+  numTrending:   "stockwatcher.numTrending",
+  newsCategory:  "stockwatcher.newsCategory",
+  holdings:      "stockwatcher.holdings",
+  decisions:     "stockwatcher.decisions",
+};
+
+// API key lives in sessionStorage only after successful login decryption.
+// Cleared when tab/browser closes — re-login required each session.
+function getApiKey() { return sessionStorage.getItem(LS.apiKey) || ""; }
+function setApiKey(k) { sessionStorage.setItem(LS.apiKey, k.trim()); }
+function clearApiKey() { sessionStorage.removeItem(LS.apiKey); }
+
+function getWatchlist() {
+  const raw = localStorage.getItem(LS.watchlist);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch (_) {}
+  return [];
+}
+function setWatchlist(list) { localStorage.setItem(LS.watchlist, JSON.stringify(list)); }
+
+function getNumTrending() {
+  const v = parseInt(localStorage.getItem(LS.numTrending), 10);
+  return Number.isFinite(v) && v > 0 ? v : 10;
+}
+function setNumTrending(n) { localStorage.setItem(LS.numTrending, String(n)); }
+
+function getNewsCategory() { return localStorage.getItem(LS.newsCategory) || "general"; }
+function setNewsCategory(c) { localStorage.setItem(LS.newsCategory, c); }
+
+function getHoldings() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS.holdings) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+}
+function setHoldings(list) { localStorage.setItem(LS.holdings, JSON.stringify(list)); }
+
+function getDecisions() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS.decisions) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+}
+function setDecisions(list) { localStorage.setItem(LS.decisions, JSON.stringify(list)); }
+function addDecision(entry) {
+  const list = getDecisions();
+  list.unshift(entry);
+  setDecisions(list);
+}
+
+function loadCache() {
+  try { return JSON.parse(localStorage.getItem(LS.cache) || "{}"); }
+  catch (_) { return {}; }
+}
+function saveCache(c) { localStorage.setItem(LS.cache, JSON.stringify(c)); }
+
+function getCached(key, kind, ttl) {
+  const c = loadCache();
+  const entry = c[key] && c[key][kind];
+  if (entry && Date.now() - entry.t < ttl) return entry.v;
+  return null;
+}
+function setCached(key, kind, v) {
+  const c = loadCache();
+  if (!c[key]) c[key] = {};
+  c[key][kind] = { v, t: Date.now() };
+  saveCache(c);
+}
+
+// =========================================================================
+// API client (throttled queue)
+// =========================================================================
+
+let lastRequestAt = 0;
+async function throttledFetch(url) {
+  const wait = Math.max(0, REQUEST_INTERVAL_MS - (Date.now() - lastRequestAt));
+  if (wait) await new Promise(r => setTimeout(r, wait));
+  lastRequestAt = Date.now();
+  const res = await fetch(url);
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 65000));
+    lastRequestAt = Date.now();
+    const retry = await fetch(url);
+    if (!retry.ok) throw new Error("HTTP " + retry.status);
+    return retry.json();
+  }
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function fhUrl(path, params) {
+  const qs = new URLSearchParams({ ...params, token: getApiKey() }).toString();
+  return `${FINNHUB_BASE}${path}?${qs}`;
+}
+
+async function fetchMarketNews(category) {
+  const cacheKey = "_news_" + category;
+  const cached = getCached(cacheKey, "items", NEWS_TTL_MS);
+  if (cached) return cached;
+  const data = await throttledFetch(fhUrl("/news", { category }));
+  setCached(cacheKey, "items", data);
+  return data;
+}
+
+async function fetchCompanyNews(symbol, fromStr, toStr) {
+  const cacheKey = symbol + "_" + fromStr;
+  const cached = getCached(cacheKey, "cnews", NEWS_TTL_MS);
+  if (cached) return cached;
+  try {
+    const data = await throttledFetch(fhUrl("/company-news", { symbol, from: fromStr, to: toStr }));
+    const items = Array.isArray(data) ? data : [];
+    setCached(cacheKey, "cnews", items);
+    return items;
+  } catch (e) { return []; }
+}
+
+// Normalize source names so "Yahoo" and "Yahoo Finance" merge into one bucket.
+function normalizeSource(s) {
+  if (!s) return "Unknown";
+  const x = String(s).trim();
+  const lower = x.toLowerCase();
+  if (lower.includes("yahoo")) return "Yahoo Finance";
+  if (lower.includes("seeking alpha")) return "Seeking Alpha";
+  if (lower.includes("motley fool") || lower === "fool") return "Motley Fool";
+  if (lower.includes("marketwatch")) return "MarketWatch";
+  if (lower.includes("reuters")) return "Reuters";
+  if (lower.includes("bloomberg")) return "Bloomberg";
+  if (lower.includes("cnbc")) return "CNBC";
+  if (lower.includes("barron")) return "Barron's";
+  if (lower.includes("financial times") || lower === "ft") return "Financial Times";
+  if (lower.includes("wall street journal") || lower === "wsj") return "WSJ";
+  if (lower.includes("investing.com") || lower === "investing") return "Investing.com";
+  if (lower.includes("benzinga")) return "Benzinga";
+  if (lower.includes("finnhub")) return "Finnhub";
+  if (lower.includes("the verge")) return "The Verge";
+  if (lower.includes("techcrunch")) return "TechCrunch";
+  if (lower.includes("forbes")) return "Forbes";
+  if (lower.includes("business insider")) return "Business Insider";
+  if (lower.includes("associated press") || lower === "ap") return "Associated Press";
+  return x;
+}
+
+// Discover trending tickers by scanning per-company news for the candidate
+// pool. Returns { trending[], allItems[] } where trending is sorted by
+// source diversity (unique sources) then total mentions (both descending).
+async function discoverTrendingFromCandidates(candidates, progressCb) {
+  const to = new Date();
+  const from = new Date(to.getTime() - 7 * 86400 * 1000);
+  const fromStr = from.toISOString().slice(0, 10);
+  const toStr = to.toISOString().slice(0, 10);
+
+  const trending = [];
+  const allItems = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (progressCb) progressCb(i, candidates.length, c.sym);
+    const items = await fetchCompanyNews(c.sym, fromStr, toStr);
+    if (items.length) {
+      // Normalize source field on each item so grouping is consistent
+      for (const it of items) {
+        it.normalizedSource = normalizeSource(it.source);
+        if (!it.related || !it.related.toUpperCase().includes(c.sym)) {
+          it.related = (it.related ? it.related + "," : "") + c.sym;
+        }
+      }
+      allItems.push(...items);
+      // Build source-count map: { source: count }
+      const sourceCounts = {};
+      for (const it of items) {
+        const s = it.normalizedSource;
+        sourceCounts[s] = (sourceCounts[s] || 0) + 1;
+      }
+      const sourceList = Object.entries(sourceCounts)
+        .map(([source, count]) => ({ source, count }))
+        .sort((a, b) => b.count - a.count);
+      const sorted = items.slice().sort((a, b) => (b.datetime || 0) - (a.datetime || 0));
+      const latest = sorted[0];
+      trending.push({
+        sym: c.sym,
+        name: c.name,
+        mentions: items.length,
+        sourceCount: sourceList.length,
+        sourceList: sourceList,
+        latestHeadline: latest ? (latest.headline || "") : "",
+        latestSource: latest ? (latest.normalizedSource || latest.source || "") : "",
+        latestUrl: latest ? (latest.url || "") : "",
+        latestTime: latest ? (latest.datetime || 0) : 0,
+        items: sorted, // store sorted-by-time for rendering
+      });
+    }
+  }
+  // Sort by source diversity first, then by total mentions, then by recency
+  trending.sort((a, b) => b.sourceCount - a.sourceCount || b.mentions - a.mentions || b.latestTime - a.latestTime);
+  return { trending, allItems };
+}
+
+async function fetchQuote(symbol) {
+  const cached = getCached(symbol, "quote", QUOTE_TTL_MS);
+  if (cached) return cached;
+  const data = await throttledFetch(fhUrl("/quote", { symbol }));
+  setCached(symbol, "quote", data);
+  return data;
+}
+
+async function fetchRecommendation(symbol) {
+  const cached = getCached(symbol, "rec", CACHE_TTL_MS);
+  if (cached) return cached;
+  const data = await throttledFetch(fhUrl("/stock/recommendation", { symbol }));
+  setCached(symbol, "rec", data);
+  return data;
+}
+
+async function fetchMetric(symbol) {
+  const cached = getCached(symbol, "metric", CACHE_TTL_MS);
+  if (cached) return cached;
+  const data = await throttledFetch(fhUrl("/stock/metric", { symbol, metric: "all" }));
+  setCached(symbol, "metric", data);
+  return data;
+}
+
+async function fetchNewsSentiment(symbol) {
+  const cached = getCached(symbol, "sent", CACHE_TTL_MS);
+  if (cached) return cached;
+  try {
+    const data = await throttledFetch(fhUrl("/news-sentiment", { symbol }));
+    setCached(symbol, "sent", data);
+    return data;
+  } catch (_) { return null; }
+}
+
+async function fetchPriceTarget(symbol) {
+  const cached = getCached(symbol, "target", CACHE_TTL_MS);
+  if (cached) return cached;
+  try {
+    const data = await throttledFetch(fhUrl("/stock/price-target", { symbol }));
+    setCached(symbol, "target", data);
+    return data;
+  } catch (_) { return null; }
+}
+
+async function fetchProfile(symbol) {
+  const cached = getCached(symbol, "profile", CACHE_TTL_MS * 4);
+  if (cached) return cached;
+  try {
+    const data = await throttledFetch(fhUrl("/stock/profile2", { symbol }));
+    setCached(symbol, "profile", data);
+    return data;
+  } catch (_) { return null; }
+}
+
+async function fetchEarningsCalendar(symbol) {
+  const cached = getCached(symbol, "earnings", CACHE_TTL_MS);
+  if (cached) return cached;
+  try {
+    const to = new Date(Date.now() + 90 * 86400 * 1000).toISOString().slice(0, 10);
+    const from = new Date(Date.now() - 120 * 86400 * 1000).toISOString().slice(0, 10);
+    const data = await throttledFetch(fhUrl("/calendar/earnings", { symbol, from, to }));
+    const list = (data && Array.isArray(data.earningsCalendar)) ? data.earningsCalendar : [];
+    setCached(symbol, "earnings", list);
+    return list;
+  } catch (_) { return []; }
+}
+
+async function fetchInsiderTransactions(symbol) {
+  const cached = getCached(symbol, "insider", CACHE_TTL_MS);
+  if (cached) return cached;
+  try {
+    const to = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.now() - 90 * 86400 * 1000).toISOString().slice(0, 10);
+    const data = await throttledFetch(fhUrl("/stock/insider-transactions", { symbol, from, to }));
+    const list = (data && Array.isArray(data.data)) ? data.data : [];
+    setCached(symbol, "insider", list);
+    return list;
+  } catch (_) { return []; }
+}
+
+// =========================================================================
+// News aggregation — extract trending tickers from the feed
+// =========================================================================
+
+// Common tokens that show up as "tickers" in Finnhub's `related` field but
+// aren't useful equity tickers (currencies, indices, broad ETFs, futures).
+const TICKER_BLACKLIST = new Set([
+  "USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "NZD",
+  "BTC", "ETH", "BNB", "XRP", "SOL", "DOGE", "ADA",
+  "GLD", "SLV", "USO", "UNG",
+  "VIX", "DXY",
+  "SPY", "QQQ", "DIA", "IWM", "VTI", "VOO", "EEM", "EFA", "TLT", "HYG", "LQD",
+]);
+
+// Heuristic: a "real equity ticker" is 1–5 uppercase letters, optionally with a dot+letter.
+const TICKER_RE = /^[A-Z]{1,5}(?:\.[A-Z])?$/;
+
+function aggregateNewsByTicker(newsItems) {
+  const map = new Map(); // sym -> { mentions, latestHeadline, latestSource, latestUrl, latestTime, sentimentSum, items[] }
+  for (const item of newsItems) {
+    const related = (item.related || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+    for (const sym of related) {
+      if (!TICKER_RE.test(sym)) continue;
+      if (TICKER_BLACKLIST.has(sym)) continue;
+      let entry = map.get(sym);
+      if (!entry) {
+        entry = { sym, mentions: 0, latestHeadline: "", latestSource: "", latestUrl: "", latestTime: 0, items: [] };
+        map.set(sym, entry);
+      }
+      entry.mentions += 1;
+      entry.items.push(item);
+      const t = item.datetime || 0;
+      if (t > entry.latestTime) {
+        entry.latestTime = t;
+        entry.latestHeadline = item.headline || "";
+        entry.latestSource = item.source || "";
+        entry.latestUrl = item.url || "";
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => b.mentions - a.mentions || b.latestTime - a.latestTime);
+}
+
+// =========================================================================
+// Scoring
+// =========================================================================
+
+function scoreAnalyst(rec) {
+  if (!Array.isArray(rec) || !rec.length) return null;
+  const r = rec[0];
+  const total = (r.strongBuy || 0) + (r.buy || 0) + (r.hold || 0) + (r.sell || 0) + (r.strongSell || 0);
+  if (!total) return null;
+  const raw = ((r.strongBuy || 0) - (r.strongSell || 0) + 0.6 * ((r.buy || 0) - (r.sell || 0))) / total;
+  return Math.round(((raw + 1) / 2) * 100);
+}
+
+function scoreMomentum(quote, metric) {
+  const m = metric && metric.metric ? metric.metric : null;
+  const high = m ? m["52WeekHigh"] : null;
+  const low = m ? m["52WeekLow"] : null;
+  if (!quote || !quote.c || !high || !low || high === low) return null;
+  let pct = ((quote.c - low) / (high - low)) * 100;
+  pct = Math.max(0, Math.min(100, pct));
+  if (pct > 92) pct = 92 + (pct - 92) * 0.3;
+  return Math.round(pct);
+}
+
+function scoreValue(metric) {
+  const m = metric && metric.metric ? metric.metric : null;
+  if (!m) return null;
+  const pe = m.peNormalizedAnnual || m.peExclExtraTTM || m.peBasicExclExtraTTM || null;
+  const dy = m.dividendYieldIndicatedAnnual || m.currentDividendYieldTTM || 0;
+  if (pe === null || pe <= 0) return null;
+  let peScore;
+  if (pe < 8) peScore = 60;
+  else if (pe < 12) peScore = 80 + (12 - pe) * 5;
+  else if (pe < 22) peScore = 100 - (pe - 12) * 1.5;
+  else if (pe < 40) peScore = 85 - (pe - 22) * 2.5;
+  else peScore = Math.max(10, 40 - (pe - 40) * 0.5);
+  peScore = Math.max(0, Math.min(100, peScore));
+  const divBonus = Math.min(15, dy * 4);
+  return Math.round(Math.max(0, Math.min(100, peScore * 0.85 + divBonus)));
+}
+
+function scoreSentiment(sent) {
+  if (!sent) return null;
+  if (sent.sentiment && typeof sent.sentiment.bullishPercent === "number") {
+    return Math.round(sent.sentiment.bullishPercent * 100);
+  }
+  if (typeof sent.companyNewsScore === "number") {
+    return Math.round(sent.companyNewsScore * 100);
+  }
+  return null;
+}
+
+function compositeScore(scores) {
+  let totalW = 0, totalS = 0;
+  for (const k of Object.keys(WEIGHTS)) {
+    if (scores[k] !== null && scores[k] !== undefined) {
+      totalW += WEIGHTS[k];
+      totalS += WEIGHTS[k] * scores[k];
+    }
+  }
+  if (!totalW) return null;
+  return Math.round(totalS / totalW);
+}
+
+function targetUpside(quote, target) {
+  if (!quote || !quote.c || !target || !target.targetMean) return null;
+  return ((target.targetMean - quote.c) / quote.c) * 100;
+}
+
+// Rating tier: 5-bucket mapping from composite (0-100) -> tier object.
+// Tiers (low to high): strongSell, sell, neutral, buy, strongBuy.
+function ratingTier(score) {
+  if (score === null || score === undefined) {
+    return { idx: 2, key: "na", label: "No data", short: "—", color: "var(--muted)" };
+  }
+  if (score <= 20) return { idx: 0, key: "strongSell", label: "Strongly Sell", short: "S.Sell", color: "#d22f48" };
+  if (score <= 40) return { idx: 1, key: "sell",       label: "Sell",          short: "Sell",   color: "#f23f5e" };
+  if (score <= 60) return { idx: 2, key: "neutral",    label: "Neutral",       short: "Hold",   color: "#f5b342" };
+  if (score <= 80) return { idx: 3, key: "buy",        label: "Buy",           short: "Buy",    color: "#2ec27e" };
+  return            { idx: 4, key: "strongBuy",  label: "Strongly Buy",  short: "S.Buy",  color: "#1faa66" };
+}
+
+// Confidence: how many of the 4 sub-signals were available.
+function confidenceLevel(scores) {
+  const have = ["analyst","momentum","value","sentiment"].filter(k => scores[k] !== null && scores[k] !== undefined).length;
+  if (have >= 4) return { label: "High", short: "4/4", color: "var(--good)" };
+  if (have === 3) return { label: "Medium", short: "3/4", color: "var(--warn)" };
+  if (have >= 1) return { label: "Low", short: have + "/4", color: "var(--bad)" };
+  return { label: "None", short: "0/4", color: "var(--muted)" };
+}
+
+// One-line plain-English explanation of the rating.
+function ratingExplain(scores) {
+  const parts = [];
+  const a = scores.analyst, m = scores.momentum, v = scores.value, s = scores.sentiment;
+  const phrase = (n, hi, lo) => n === null ? null : (n >= 70 ? hi : n <= 35 ? lo : null);
+  const ph1 = phrase(a, "strong analyst consensus", "weak analyst consensus");
+  if (ph1) parts.push(ph1);
+  const ph2 = phrase(m, "strong upward momentum", "weak / oversold momentum");
+  if (ph2) parts.push(ph2);
+  const ph3 = phrase(v, "attractive valuation", "rich valuation");
+  if (ph3) parts.push(ph3);
+  const ph4 = phrase(s, "bullish news sentiment", "bearish news sentiment");
+  if (ph4) parts.push(ph4);
+  if (!parts.length) return "Mixed signals across analyst, momentum, value, and sentiment.";
+  return parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + (parts.length > 1 ? " · " + parts.slice(1).join(" · ") : "") + ".";
+}
+
+// Days until next earnings (positive = future). Null if unknown.
+function daysToNextEarnings(earningsList) {
+  if (!Array.isArray(earningsList) || !earningsList.length) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let nearest = null;
+  for (const e of earningsList) {
+    if (!e.date) continue;
+    const d = new Date(e.date);
+    if (Number.isNaN(d.getTime())) continue;
+    const diffDays = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (diffDays < 0) continue;
+    if (nearest === null || diffDays < nearest) nearest = diffDays;
+  }
+  return nearest;
+}
+
+// Net insider activity (last 90d): { netShares, buyCount, sellCount }
+function summarizeInsider(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  let net = 0, buys = 0, sells = 0;
+  for (const t of list) {
+    const ch = Number(t.change) || 0;
+    if (ch > 0) buys++;
+    else if (ch < 0) sells++;
+    net += ch;
+  }
+  return { netShares: net, buyCount: buys, sellCount: sells, total: list.length };
+}
+
+// Override flags: hard signals that supersede the composite score.
+// Returns array of { kind, label, tone } where tone is "warn" | "alert" | "info".
+function detectOverrides(row) {
+  const flags = [];
+  const days = daysToNextEarnings(row.earnings);
+  if (days !== null) {
+    if (days <= 1) flags.push({ kind: "earnings", label: days === 0 ? "Earnings today" : "Earnings tomorrow", tone: "alert" });
+    else if (days <= 7) flags.push({ kind: "earnings", label: `Earnings in ${days}d`, tone: "warn" });
+  }
+  const ins = summarizeInsider(row.insider);
+  if (ins && ins.total >= 3) {
+    if (ins.netShares < 0 && ins.sellCount >= ins.buyCount * 2) {
+      flags.push({ kind: "insider-sell", label: "Heavy insider selling", tone: "warn" });
+    } else if (ins.netShares > 0 && ins.buyCount >= ins.sellCount * 2) {
+      flags.push({ kind: "insider-buy", label: "Insider buying", tone: "info" });
+    }
+  }
+  const m = row.metric && row.metric.metric ? row.metric.metric : null;
+  if (row.quote && row.quote.c && m && m["52WeekHigh"] && m["52WeekLow"]) {
+    const lo = m["52WeekLow"], hi = m["52WeekHigh"], c = row.quote.c;
+    const distLow = (c - lo) / lo;
+    const distHigh = (hi - c) / hi;
+    if (distLow < 0.10 && (row.scores.sentiment === null || row.scores.sentiment < 40)) {
+      flags.push({ kind: "near-low", label: "Near 52W low", tone: "warn" });
+    } else if (distHigh < 0.05) {
+      flags.push({ kind: "near-high", label: "Near 52W high", tone: "info" });
+    }
+  }
+  return flags;
+}
+
+// Topic classifier — keyword-based, runs offline on each article.
+const TOPIC_KEYWORDS = [
+  { topic: "earnings",   re: /\b(earnings|revenue|EPS|quarterly|guidance|beat|miss(?:ed|es)?|Q[1-4]\b|fiscal)\b/i },
+  { topic: "ma",         re: /\b(merger|mergers|acquisition|acquires|acquired|buyout|takeover|spin[- ]off|deal)\b/i },
+  { topic: "regulatory", re: /\b(SEC|FDA|FTC|DOJ|lawsuit|antitrust|investigation|probe|fine[ds]?|regulator|subpoena)\b/i },
+  { topic: "analyst",    re: /\b(upgrade[ds]?|downgrade[ds]?|rating|price target|raises|lowers|outperform|underperform|reiterate)\b/i },
+  { topic: "macro",      re: /\b(Fed|Federal Reserve|rate cut|rate hike|inflation|GDP|tariff|recession|Powell|CPI|jobs report)\b/i },
+  { topic: "product",    re: /\b(launch(?:e[sd])?|unveils?|announces?|new product|release[ds]?|debut|rolls out)\b/i },
+];
+const TOPIC_META = {
+  earnings:   { label: "Earnings",   color: "#4f8cff" },
+  ma:         { label: "M&A",        color: "#b388ff" },
+  regulatory: { label: "Regulatory", color: "#f23f5e" },
+  analyst:    { label: "Analyst",    color: "#2ec27e" },
+  macro:      { label: "Macro",      color: "#f5b342" },
+  product:    { label: "Product",    color: "#ffd35a" },
+  other:      { label: "Other",      color: "#8a96ab" },
+};
+function classifyTopic(article) {
+  const text = ((article.headline || "") + " " + (article.summary || ""));
+  for (const t of TOPIC_KEYWORDS) {
+    if (t.re.test(text)) return t.topic;
+  }
+  return "other";
+}
+
+// Volatility score 0-100. Primary signal: beta from Finnhub metric. Fallback:
+// 52-week range as a percentage of the low (a wide range = high realized vol).
+// beta 0.5→0, 1.0→25, 1.5→50, 2.0→75, 2.5+→100.
+function volScore(row) {
+  const m = row.metric && row.metric.metric ? row.metric.metric : null;
+  if (m && typeof m.beta === "number" && m.beta > 0) {
+    return Math.max(0, Math.min(100, (m.beta - 0.5) * 50));
+  }
+  if (m && m["52WeekHigh"] && m["52WeekLow"] && m["52WeekLow"] > 0) {
+    const range = (m["52WeekHigh"] - m["52WeekLow"]) / m["52WeekLow"];
+    return Math.max(0, Math.min(100, range * 75));
+  }
+  return null;
+}
+function volLabel(vs) {
+  if (vs === null) return { label: "—", color: "var(--muted)" };
+  if (vs < 25)  return { label: "Low vol",      color: "var(--good)" };
+  if (vs < 50)  return { label: "Moderate vol", color: "var(--accent)" };
+  if (vs < 75)  return { label: "Elevated vol", color: "var(--warn)" };
+  return          { label: "High vol",     color: "var(--bad)" };
+}
+
+// Long-term fit (multi-year hold): rewards analyst conviction, attractive
+// valuation, dividend, and steady momentum. Penalizes overbought extremes
+// and excess volatility — long-term holders want a smoother ride.
+function longTermFit(row) {
+  const a = row.scores.analyst, v = row.scores.value, m = row.scores.momentum;
+  let total = 0, weight = 0;
+  if (a !== null) { total += a * 0.40; weight += 0.40; }
+  if (v !== null) { total += v * 0.40; weight += 0.40; }
+  if (m !== null) {
+    const adj = m > 90 ? 55 : (m < 25 ? 35 : m);
+    total += adj * 0.20; weight += 0.20;
+  }
+  if (!weight) return null;
+  let score = total / weight;
+  const mt = row.metric && row.metric.metric ? row.metric.metric : null;
+  const dy = mt ? (mt.dividendYieldIndicatedAnnual || mt.currentDividendYieldTTM || 0) : 0;
+  if (dy > 0) score += Math.min(8, dy * 1.5);
+  // Penalty: anything above moderate volatility (>50) costs long-term fit.
+  // High-vol stocks (vol 80+) lose ~12 points; speculative names get pushed out of long-term.
+  const vs = volScore(row);
+  if (vs !== null && vs > 50) score -= (vs - 50) * 0.4;
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+// Short-term fit (days to ~2 months): rewards high volatility, momentum,
+// sentiment, and active news catalyst. Volatility = tradeable price swings,
+// which is exactly what short-term traders need. Analyst weight is small —
+// short-term moves often run *against* analyst consensus.
+function shortTermFit(row) {
+  const a = row.scores.analyst, s = row.scores.sentiment, m = row.scores.momentum;
+  let total = 0, weight = 0;
+  if (m !== null) { total += m * 0.40; weight += 0.40; }
+  if (s !== null) { total += s * 0.30; weight += 0.30; }
+  if (a !== null) { total += a * 0.10; weight += 0.10; }
+  if (!weight) return null;
+  let score = total / weight;
+  // News buzz amplifies short-term thesis — stocks the market is already talking about move
+  score += Math.min(15, (row.buzz || 0) * 1.0);
+  // Volatility bonus: vol 30→0, vol 50→+5, vol 75→+11, vol 100→+18.
+  // High-vol names land here naturally; low-vol mega-caps don't.
+  const vs = volScore(row);
+  if (vs !== null) score += Math.max(-5, (vs - 30) * 0.25);
+  // Catalyst bonus — earnings/M&A/analyst news hits harder over weeks
+  const trend = trendingMap.get(row.sym);
+  if (trend && trend.items && trend.items.length) {
+    const hot = ["earnings", "ma", "analyst", "regulatory"];
+    const topics = new Set(trend.items.slice(0, 5).map(it => classifyTopic(it)));
+    if (hot.some(t => topics.has(t))) score += 6;
+  }
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+// =========================================================================
+// Rendering helpers
+// =========================================================================
+
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function fmt(n, dp = 2) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return Number(n).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+function fmtPct(n, dp = 1) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return (n >= 0 ? "+" : "") + Number(n).toFixed(dp) + "%";
+}
+function pillClass(score) {
+  if (score === null || score === undefined) return "score-na";
+  if (score >= 70) return "score-hi";
+  if (score >= 50) return "score-mid";
+  return "score-lo";
+}
+function relTime(unixSec) {
+  if (!unixSec) return "—";
+  const ageS = Date.now() / 1000 - unixSec;
+  if (ageS < 60) return "just now";
+  if (ageS < 3600) return Math.floor(ageS / 60) + "m ago";
+  if (ageS < 86400) return Math.floor(ageS / 3600) + "h ago";
+  if (ageS < 604800) return Math.floor(ageS / 86400) + "d ago";
+  return new Date(unixSec * 1000).toLocaleDateString();
+}
+function rangeBar(quote, metric) {
+  const m = metric && metric.metric ? metric.metric : null;
+  if (!quote || !quote.c || !m || !m["52WeekHigh"] || !m["52WeekLow"]) return "—";
+  const lo = m["52WeekLow"], hi = m["52WeekHigh"];
+  if (hi === lo) return "—";
+  const pct = Math.max(0, Math.min(100, ((quote.c - lo) / (hi - lo)) * 100));
+  return `<span class="range-bar" title="52W: $${fmt(lo)}–$${fmt(hi)}"><span class="range-fill" style="width:100%"></span><span class="range-marker" style="left:${pct.toFixed(0)}%"></span></span>`;
+}
+
+// Build the buy/sell meter HTML for a row.
+// opts: { compact?: boolean, showConfidence?: boolean, dataSym?: string }
+function renderMeter(scores, opts = {}) {
+  const score = scores.composite;
+  const tier = ratingTier(score);
+  const conf = confidenceLevel(scores);
+  const compact = !!opts.compact;
+  const sym = opts.dataSym || "";
+  if (score === null || score === undefined) {
+    return `<div class="meter ${compact ? "compact" : ""} meter-cell" data-sym="${escapeHtml(sym)}" title="No composite data — at least one of analyst / momentum / value / sentiment is required.">
+      <div class="meter-bar is-na"></div>
+      <div class="meter-label"><span class="tier" style="color:${tier.color}">${tier.label}</span><span class="conf">—</span></div>
+    </div>`;
+  }
+  const pct = Math.max(0, Math.min(100, score));
+  return `<div class="meter ${compact ? "compact" : ""} meter-cell" data-sym="${escapeHtml(sym)}" title="${tier.label} · score ${score} · ${conf.short} signals · click for breakdown">
+    <div class="meter-bar"><span class="meter-needle" style="left: calc(${pct}% - 1.5px);"></span></div>
+    <div class="meter-label">
+      <span class="tier" style="color:${tier.color}">${tier.label} · ${score}</span>
+      ${opts.showConfidence === false ? "" : `<span class="conf" style="color:${conf.color};">${conf.short}</span>`}
+    </div>
+  </div>`;
+}
+
+function renderFlags(flags) {
+  if (!flags || !flags.length) return "";
+  return `<span class="flags-stack">${flags.map(f => `<span class="flag ${f.tone}" title="${escapeHtml(f.kind)}">${escapeHtml(f.label)}</span>`).join("")}</span>`;
+}
+
+// Modal/drawer machinery
+function openDrawer(html) {
+  closeDrawer();
+  const back = document.createElement("div");
+  back.className = "drawer-backdrop";
+  back.id = "activeDrawer";
+  back.innerHTML = `<div class="drawer">${html}</div>`;
+  back.addEventListener("click", (e) => { if (e.target === back) closeDrawer(); });
+  document.body.appendChild(back);
+  // Hook up any close-x buttons inside
+  back.querySelectorAll("[data-close-drawer]").forEach(el => el.addEventListener("click", closeDrawer));
+}
+function closeDrawer() {
+  const d = document.getElementById("activeDrawer");
+  if (d) d.remove();
+}
+
+// Breakdown drawer for a single ticker — sub-scores, explanation, flags,
+// earnings history, insider summary, decision actions.
+function openBreakdownDrawer(sym) {
+  const r = rowState[sym];
+  if (!r) return;
+  const tier = ratingTier(r.scores.composite);
+  const conf = confidenceLevel(r.scores);
+  const flags = detectOverrides(r);
+  const days = daysToNextEarnings(r.earnings);
+  const ins = summarizeInsider(r.insider);
+
+  const subRow = (key, label, weight) => {
+    const s = r.scores[key];
+    const has = s !== null && s !== undefined;
+    return `<div class="breakdown-row">
+      <span class="label">${label}</span>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${has ? s : 0}%; opacity:${has ? 1 : 0.3};"></div></div>
+      <span class="score">${has ? s : "—"}</span>
+      <span class="weight">${Math.round(weight * 100)}%</span>
+    </div>`;
+  };
+
+  const earningsHist = (r.earnings || [])
+    .filter(e => e.date && new Date(e.date) <= new Date())
+    .slice(0, 4)
+    .map(e => {
+      const beat = (e.epsActual !== null && e.epsActual !== undefined && e.epsEstimate !== null && e.epsEstimate !== undefined)
+        ? (e.epsActual - e.epsEstimate)
+        : null;
+      const cls = beat === null ? "even" : (beat > 0 ? "beat" : beat < 0 ? "miss" : "even");
+      const tag = beat === null ? "—" : (beat > 0 ? `Beat by $${fmt(beat, 2)}` : `Missed by $${fmt(Math.abs(beat), 2)}`);
+      return `<div class="earn-row"><span class="when">${escapeHtml(e.date)}</span><span class="delta ${cls}">${escapeHtml(tag)}</span><span style="color:var(--muted); font-size:11px;">${e.epsActual !== null && e.epsActual !== undefined ? "EPS $" + fmt(e.epsActual, 2) : ""}</span></div>`;
+    }).join("");
+
+  const insiderHtml = ins
+    ? `<div class="stat-grid">
+        <div class="stat"><div class="stat-label">90d insider buys</div><div class="stat-value" style="color:var(--good);">${ins.buyCount}</div></div>
+        <div class="stat"><div class="stat-label">90d insider sells</div><div class="stat-value" style="color:var(--bad);">${ins.sellCount}</div></div>
+        <div class="stat"><div class="stat-label">Net shares</div><div class="stat-value" style="color:${ins.netShares >= 0 ? "var(--good)" : "var(--bad)"};">${ins.netShares >= 0 ? "+" : ""}${ins.netShares.toLocaleString()}</div></div>
+        <div class="stat"><div class="stat-label">Total transactions</div><div class="stat-value">${ins.total}</div></div>
+      </div>`
+    : `<div class="holdings-empty" style="margin: 0;">No insider transaction data.</div>`;
+
+  const m = r.metric && r.metric.metric ? r.metric.metric : null;
+  const pe = m ? (m.peNormalizedAnnual || m.peExclExtraTTM || m.peBasicExclExtraTTM) : null;
+  const dy = m ? (m.dividendYieldIndicatedAnnual || m.currentDividendYieldTTM) : null;
+
+  openDrawer(`
+    <button class="close-x" data-close-drawer>&times;</button>
+    <h3>${escapeHtml(r.sym)} <span style="color:var(--muted); font-size:14px; font-weight: 400;">${escapeHtml(r.name || "")}</span></h3>
+    <div class="drawer-sub">${r.quote ? "$" + fmt(r.quote.c) + " · " + (r.quote.dp >= 0 ? "+" : "") + fmt(r.quote.dp, 2) + "%" : "—"}</div>
+
+    ${renderMeter(r.scores, { dataSym: r.sym, showConfidence: true })}
+    <div style="font-size:12px; color: var(--muted); margin-top: 6px;">Confidence: <strong style="color:${conf.color}">${conf.label}</strong> (${conf.short} signals available)</div>
+    ${flags.length ? `<div style="margin-top: 10px;">${renderFlags(flags)}</div>` : ""}
+
+    <div class="breakdown-explain">${escapeHtml(ratingExplain(r.scores))}</div>
+
+    <div class="drawer-section">
+      <h4>Score breakdown</h4>
+      ${subRow("analyst", "Analyst", WEIGHTS.analyst)}
+      ${subRow("momentum", "Momentum", WEIGHTS.momentum)}
+      ${subRow("value", "Value", WEIGHTS.value)}
+      ${subRow("sentiment", "Sentiment", WEIGHTS.sentiment)}
+    </div>
+
+    <div class="drawer-section">
+      <h4>Quick stats</h4>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-label">P/E</div><div class="stat-value">${pe ? fmt(pe, 1) : "—"}</div></div>
+        <div class="stat"><div class="stat-label">Div yield</div><div class="stat-value">${dy ? fmt(dy, 2) + "%" : "—"}</div></div>
+        <div class="stat"><div class="stat-label">Target upside</div><div class="stat-value" style="color:${r.targetUpside === null ? "var(--muted)" : r.targetUpside >= 0 ? "var(--good)" : "var(--bad)"};">${r.targetUpside === null ? "—" : fmtPct(r.targetUpside, 0)}</div></div>
+        <div class="stat"><div class="stat-label">Next earnings</div><div class="stat-value">${days === null ? "—" : days === 0 ? "Today" : days + "d"}</div></div>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>Earnings history</h4>
+      ${earningsHist || `<div class="holdings-empty" style="margin: 0;">No earnings history.</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <h4>Insider activity (90d)</h4>
+      ${insiderHtml}
+    </div>
+
+    <div class="drawer-actions">
+      <button class="primary" data-decision-action="buy" data-sym="${escapeHtml(r.sym)}">📒 Log Buy decision</button>
+      <button data-decision-action="sell" data-sym="${escapeHtml(r.sym)}">Log Sell</button>
+      <button data-decision-action="hold" data-sym="${escapeHtml(r.sym)}">Log Hold</button>
+      <button data-close-drawer>Close</button>
+    </div>
+  `);
+
+  // Wire up decision-action buttons
+  document.querySelectorAll("[data-decision-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      openDecisionDialog(btn.dataset.sym, btn.dataset.decisionAction);
+    });
+  });
+}
+
+// =========================================================================
+// State
+// =========================================================================
+
+let rowState = {};       // sym -> row data
+let allNews = [];        // raw news items
+let trendingMap = new Map(); // sym -> aggregated info
+let sortKey = "composite";
+let sortDir = "desc";
+let newsFilter = "";     // text filter
+let newsTickerFilter = ""; // ticker filter
+let topicFilter = "";    // topic filter for news ("" = all)
+let holdingsOnly = false; // news feed: show only articles mentioning holdings
+let prospectTab = "all"; // "all" | "long" | "short" — Top stories tab
+
+// =========================================================================
+// Table rendering
+// =========================================================================
+
+function getSortValue(row, key) {
+  switch (key) {
+    case "symbol": return row.sym;
+    case "name": return row.name || "";
+    case "source": return row.source;
+    case "buzz": return row.buzz || 0;
+    case "price": return row.quote ? row.quote.c : 0;
+    case "changePct": return row.quote ? row.quote.dp : 0;
+    case "pe": return (row.metric && row.metric.metric && (row.metric.metric.peNormalizedAnnual || row.metric.metric.peExclExtraTTM)) || 0;
+    case "yield": return (row.metric && row.metric.metric && row.metric.metric.dividendYieldIndicatedAnnual) || 0;
+    case "analyst": return row.scores.analyst ?? -1;
+    case "targetUpside": return row.targetUpside ?? -999;
+    case "momentum": return row.scores.momentum ?? -1;
+    case "rangePos": return row.scores.momentum ?? -1;
+    case "value": return row.scores.value ?? -1;
+    case "sentiment": return row.scores.sentiment ?? -1;
+    case "composite": return row.scores.composite ?? -1;
+    default: return 0;
+  }
+}
+
+function rerenderTable() {
+  const rows = Object.values(rowState);
+  rows.sort((a, b) => {
+    const av = getSortValue(a, sortKey), bv = getSortValue(b, sortKey);
+    if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortDir === "asc" ? av - bv : bv - av;
+  });
+
+  const tbody = $("resultsBody");
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="16" class="empty-msg">No stocks tracked yet. Refresh to discover trending names from market news.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(r => {
+      const m = r.metric && r.metric.metric ? r.metric.metric : null;
+      const pe = m ? (m.peNormalizedAnnual || m.peExclExtraTTM || m.peBasicExclExtraTTM) : null;
+      const dy = m ? (m.dividendYieldIndicatedAnnual || m.currentDividendYieldTTM) : null;
+      const change = r.quote ? r.quote.dp : null;
+      const changeClass = change === null ? "" : change >= 0 ? "pos" : "neg";
+      let trClass = "";
+      if (r.source === "trending") trClass = "is-trending";
+      else if (r.source === "watchlist") trClass = "is-watch";
+      else if (r.source === "both") trClass = "is-trending is-watch";
+      else if (r.source === "holding") trClass = "is-watch";
+      const sourceTag = r.source === "trending" ? `<span class="source-tag discovery">News</span>`
+                      : r.source === "watchlist" ? `<span class="source-tag watchlist">Watch</span>`
+                      : r.source === "holding" ? `<span class="source-tag watchlist" title="In your portfolio">Holding</span>`
+                      : r.source === "fallback" ? `<span class="source-tag fallback">Big-cap</span>`
+                      : `<span class="source-tag both">Both</span>`;
+      const buzzCell = r.buzz > 0 ? `<span class="buzz-pill">${r.buzz}</span>` : `<span class="pill score-na">—</span>`;
+      const flags = detectOverrides(r);
+      const flagsCell = flags.length ? renderFlags(flags) : `<span style="color: var(--muted); font-size: 11px;">—</span>`;
+      return `
+        <tr class="${trClass}">
+          <td class="ticker">${escapeHtml(r.sym)}</td>
+          <td class="company" title="${escapeHtml(r.name || "")}">${escapeHtml(r.name || "")}</td>
+          <td class="center">${sourceTag}</td>
+          <td class="center">${buzzCell}</td>
+          <td class="num right">${r.quote ? "$" + fmt(r.quote.c) : "—"}</td>
+          <td class="num right ${changeClass}">${change === null ? "—" : fmtPct(change)}</td>
+          <td class="num right">${pe ? fmt(pe, 1) : "—"}</td>
+          <td class="num right">${dy ? fmt(dy, 2) + "%" : "—"}</td>
+          <td class="center"><span class="pill ${pillClass(r.scores.analyst)}">${r.scores.analyst ?? "—"}</span></td>
+          <td class="num right ${r.targetUpside === null ? "" : r.targetUpside >= 0 ? "pos" : "neg"}">${r.targetUpside === null ? "—" : fmtPct(r.targetUpside, 0)}</td>
+          <td class="center"><span class="pill ${pillClass(r.scores.momentum)}">${r.scores.momentum ?? "—"}</span></td>
+          <td class="center">${rangeBar(r.quote, r.metric)}</td>
+          <td class="center"><span class="pill ${pillClass(r.scores.value)}">${r.scores.value ?? "—"}</span></td>
+          <td class="center"><span class="pill ${pillClass(r.scores.sentiment)}">${r.scores.sentiment ?? "—"}</span></td>
+          <td class="center">${flagsCell}</td>
+          <td class="center">${renderMeter(r.scores, { compact: true, dataSym: r.sym })}</td>
+        </tr>
+      `;
+    }).join("");
+
+    // Wire up clicks on meter cells -> open breakdown drawer
+    tbody.querySelectorAll(".meter-cell").forEach(el => {
+      el.addEventListener("click", () => openBreakdownDrawer(el.dataset.sym));
+    });
+  }
+
+  document.querySelectorAll("thead th").forEach(th => {
+    th.classList.remove("sorted-asc", "sorted-desc");
+    if (th.dataset.sort === sortKey) th.classList.add(sortDir === "asc" ? "sorted-asc" : "sorted-desc");
+  });
+
+  renderTrending();
+}
+
+function renderTrending() {
+  // Build story groups using trendingMap (which holds the per-ticker news data)
+  // combined with rowState (which holds price + composite from enrichment).
+  const stories = [];
+  for (const r of Object.values(rowState)) {
+    if (r.source === "trending" || r.source === "both") {
+      const trend = trendingMap.get(r.sym);
+      if (!trend) continue;
+      stories.push({
+        row: r,
+        trend,
+        longFit: longTermFit(r),
+        shortFit: shortTermFit(r),
+      });
+    }
+  }
+  if (!stories.length) {
+    $("trendingPanel").classList.add("hidden");
+    return;
+  }
+
+  // Mutual-exclusion membership: each stock belongs to whichever side its
+  // thesis dominates. Ties default to long-term (the more conservative bucket).
+  const isLongDominant = (s) => {
+    if (s.longFit === null) return false;
+    if (s.shortFit === null) return true;
+    return s.longFit >= s.shortFit;
+  };
+  const isShortDominant = (s) => {
+    if (s.shortFit === null) return false;
+    if (s.longFit === null) return true;
+    return s.shortFit > s.longFit;
+  };
+
+  // Top up to a minimum of MIN_PER_TAB so the user always sees enough options.
+  // CRITICAL: when borrowing fillers from the other side, REMOVE them from
+  // that other side too — otherwise the same stock appears in both tabs.
+  // The smaller side gets filled first; whichever stocks move are pulled
+  // from the giving side's list. Mutual exclusion is preserved.
+  const MIN_PER_TAB = 4;
+  let longList = stories.filter(isLongDominant);
+  let shortList = stories.filter(isShortDominant);
+
+  const transferFillers = (weakList, strongList, weakFitKey) => {
+    if (weakList.length >= MIN_PER_TAB) return [weakList, strongList];
+    const need = MIN_PER_TAB - weakList.length;
+    // Pick the stocks from strongList that fit the weak side BEST — i.e., the
+    // least strongly dominant of the strong side, which makes the smallest
+    // "violation" of pure dominance ordering when moved.
+    const movers = strongList
+      .slice()
+      .filter(s => s[weakFitKey] !== null)
+      .sort((a, b) => (b[weakFitKey] || 0) - (a[weakFitKey] || 0))
+      .slice(0, need);
+    const movedSyms = new Set(movers.map(s => s.row.sym));
+    return [weakList.concat(movers), strongList.filter(s => !movedSyms.has(s.row.sym))];
+  };
+
+  // Fill the smaller side first so it gets first dibs on cross-bucket fillers.
+  if (longList.length < shortList.length) {
+    [longList, shortList]   = transferFillers(longList, shortList, "longFit");
+    [shortList, longList]   = transferFillers(shortList, longList, "shortFit");
+  } else {
+    [shortList, longList]   = transferFillers(shortList, longList, "shortFit");
+    [longList, shortList]   = transferFillers(longList, shortList, "longFit");
+  }
+  const cAll = $("tabCountAll"); if (cAll) cAll.textContent = stories.length;
+  const cLong = $("tabCountLong"); if (cLong) cLong.textContent = longList.length;
+  const cShort = $("tabCountShort"); if (cShort) cShort.textContent = shortList.length;
+
+  // Tab description
+  const descs = {
+    all:   "Ranked by <strong>source diversity</strong> — stocks covered by the most different financial outlets bubble to the top.",
+    long:  "Stocks where the <strong>long-term thesis dominates</strong> — analyst conviction, valuation, dividend, steady momentum. Your core-hold candidates.",
+    short: "Stocks where the <strong>short-term thesis dominates</strong> — momentum, sentiment, and catalysts outweigh long-term fundamentals. Different names from the long-term tab.",
+  };
+  $("tabDesc").innerHTML = descs[prospectTab] || descs.all;
+
+  // Update active tab
+  document.querySelectorAll(".tab-btn[data-tab]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === prospectTab);
+  });
+
+  // Filter + sort by tab — long and short tabs are mutually exclusive
+  let filtered;
+  if (prospectTab === "long") {
+    filtered = longList.slice().sort((a, b) =>
+      (b.longFit || 0) - (a.longFit || 0) || b.trend.sourceCount - a.trend.sourceCount
+    );
+  } else if (prospectTab === "short") {
+    filtered = shortList.slice().sort((a, b) =>
+      (b.shortFit || 0) - (a.shortFit || 0) || b.trend.mentions - a.trend.mentions
+    );
+  } else {
+    filtered = stories.slice().sort((a, b) => {
+      return b.trend.sourceCount - a.trend.sourceCount
+          || b.trend.mentions - a.trend.mentions
+          || (b.row.scores.composite || 0) - (a.row.scores.composite || 0);
+    });
+  }
+
+  if (!filtered.length) {
+    $("trendingPanel").classList.remove("hidden");
+    $("trendingGrid").innerHTML = `<div class="empty-msg">No stocks fit this category yet — check back after enrichment finishes.</div>`;
+    return;
+  }
+  // Reassign for downstream rendering loop
+  const renderStories = filtered;
+  $("trendingPanel").classList.remove("hidden");
+  $("trendingGrid").innerHTML = renderStories.map((s, i) => {
+    const r = s.row, t = s.trend;
+    const change = r.quote ? r.quote.dp : null;
+    const changeClass = change === null ? "" : change >= 0 ? "pos" : "neg";
+    const featured = i < 3 ? "featured" : "";
+
+    // Source badges (top 6, with overflow indicator)
+    const sourceBadges = t.sourceList.slice(0, 6).map(s =>
+      `<span class="source-badge" title="${escapeHtml(s.source)}: ${s.count} article${s.count === 1 ? "" : "s"}">${escapeHtml(s.source)}<span class="src-count">${s.count}</span></span>`
+    ).join("");
+    const moreSources = t.sourceList.length > 6 ? `<span class="source-badge" style="color: var(--muted);">+${t.sourceList.length - 6} more</span>` : "";
+
+    // Articles (initially collapsed to 3 unless few)
+    const articleRows = t.items.map(it =>
+      `<div class="article-row">
+        <span class="src-tag" title="${escapeHtml(it.normalizedSource || it.source || "")}">${escapeHtml(it.normalizedSource || it.source || "")}</span>
+        <span class="art-headline"><a href="${escapeHtml(it.url || "#")}" target="_blank" rel="noopener">${escapeHtml(it.headline || "Untitled")}</a></span>
+        <span class="art-time">${relTime(it.datetime)}</span>
+      </div>`
+    ).join("");
+    const collapsed = t.items.length > 3;
+    const moreBtn = collapsed
+      ? `<button class="show-more-btn" data-action="toggle-articles">▾ Show all ${t.items.length} articles</button>`
+      : "";
+
+    const flags = detectOverrides(r);
+
+    // Fit pill — long/short/both fit scores. Always show both so user can see how a stock ranks for either time horizon.
+    const fitClass = (n) => n === null ? "weak" : n >= 70 ? "long" : n >= 50 ? "short" : "weak";
+    const longPill = s.longFit !== null
+      ? `<span class="fit-pill ${fitClass(s.longFit)}" title="Long-term fit (multi-year hold)">🏛️ ${s.longFit}</span>`
+      : "";
+    const shortPill = s.shortFit !== null
+      ? `<span class="fit-pill ${fitClass(s.shortFit)}" title="Short-term fit (days to ~2 months)">⚡ ${s.shortFit}</span>`
+      : "";
+    const vs = volScore(r);
+    const vl = volLabel(vs);
+    const volPill = vs !== null
+      ? `<span class="fit-pill" style="background:${vl.color}22; color:${vl.color};" title="Volatility (beta-derived). Score: ${Math.round(vs)}/100">📊 ${vl.label}</span>`
+      : "";
+
+    return `
+      <div class="story-card ${featured}" data-sym="${escapeHtml(r.sym)}">
+        <div class="rank">#${i + 1}</div>
+        <div class="head-row">
+          <span class="ticker">${escapeHtml(r.sym)}</span>
+          <span class="company">${escapeHtml(r.name || "")}</span>
+        </div>
+        <div class="price-row">
+          ${r.quote ? `<span class="price">${fmt(r.quote.c)}</span><span class="${changeClass}">${change === null ? "" : fmtPct(change)}</span>` : `<span class="price">—</span>`}
+        </div>
+        ${renderMeter(r.scores, { dataSym: r.sym })}
+        ${flags.length ? `<div>${renderFlags(flags)}</div>` : ""}
+        <div class="stats-row">
+          ${longPill}
+          ${shortPill}
+          ${volPill}
+          <span class="source-count-pill" title="${t.sourceCount} unique source${t.sourceCount === 1 ? "" : "s"}">📡 ${t.sourceCount}</span>
+          <span class="buzz-pill" title="${t.mentions} article${t.mentions === 1 ? "" : "s"}">📰 ${t.mentions}</span>
+        </div>
+        <div class="source-list">${sourceBadges}${moreSources}</div>
+        <div class="article-list ${collapsed ? "collapsed" : ""}">${articleRows}</div>
+        ${moreBtn}
+      </div>
+    `;
+  }).join("");
+
+  // Wire up meter clicks on story cards
+  $("trendingGrid").querySelectorAll(".meter-cell").forEach(el => {
+    el.addEventListener("click", (e) => { e.stopPropagation(); openBreakdownDrawer(el.dataset.sym); });
+  });
+
+  // Wire up "Show all" toggles
+  document.querySelectorAll(".show-more-btn[data-action='toggle-articles']").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const card = btn.closest(".story-card");
+      const list = card.querySelector(".article-list");
+      const isCollapsed = list.classList.toggle("collapsed");
+      btn.textContent = isCollapsed
+        ? `▾ Show all ${list.children.length} articles`
+        : `▴ Show fewer`;
+    });
+  });
+}
+
+// Decision dialog — log a buy/sell/hold with reasoning, captured at the
+// current price + rating so future-you can review past calls.
+function openDecisionDialog(sym, direction) {
+  const r = rowState[sym];
+  if (!r) return;
+  const tier = ratingTier(r.scores.composite);
+  const dirLabel = { buy: "BUY", sell: "SELL", hold: "HOLD" }[direction] || direction.toUpperCase();
+  const dirClass = direction === "buy" ? "buy" : direction === "sell" ? "sell" : "hold";
+  openDrawer(`
+    <button class="close-x" data-close-drawer>&times;</button>
+    <h3>Log decision · ${escapeHtml(sym)}</h3>
+    <div class="drawer-sub">Recording your <strong>${dirLabel}</strong> reasoning so you can review the call later.</div>
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Direction</div><div class="stat-value"><span class="dir ${dirClass}" style="padding: 2px 10px; border-radius: 4px; font-size: 14px;">${dirLabel}</span></div></div>
+      <div class="stat"><div class="stat-label">Price now</div><div class="stat-value">${r.quote ? "$" + fmt(r.quote.c) : "—"}</div></div>
+      <div class="stat"><div class="stat-label">Rating</div><div class="stat-value" style="color:${tier.color}; font-size: 13px;">${tier.label}${r.scores.composite !== null ? " · " + r.scores.composite : ""}</div></div>
+      <div class="stat"><div class="stat-label">Date</div><div class="stat-value" style="font-size: 13px;">${new Date().toLocaleDateString()}</div></div>
+    </div>
+    <div class="drawer-section" style="border-top: none; padding-top: 6px;">
+      <h4 style="margin-bottom: 6px;">Why are you making this call?</h4>
+      <textarea id="decisionReason" placeholder="e.g. Strong Q3 beat, momentum building, holding through earnings..." style="width: 100%; min-height: 90px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: inherit; font-size: 13px; resize: vertical;"></textarea>
+    </div>
+    <div class="drawer-actions">
+      <button class="primary" id="confirmDecisionBtn">Save to journal</button>
+      <button data-close-drawer>Cancel</button>
+    </div>
+  `);
+  const reasonEl = document.getElementById("decisionReason");
+  reasonEl.focus();
+  document.getElementById("confirmDecisionBtn").addEventListener("click", () => {
+    addDecision({
+      sym: sym,
+      name: r.name || "",
+      direction,
+      date: new Date().toISOString(),
+      price: r.quote ? r.quote.c : null,
+      compositeScore: r.scores.composite,
+      ratingLabel: tier.label,
+      reason: reasonEl.value.trim(),
+    });
+    closeDrawer();
+    showInfo("✅ Decision logged to journal.");
+    setTimeout(clearInfo, 3000);
+  });
+}
+
+// Journal viewer — list of past decisions, newest first.
+function openJournalViewer() {
+  const list = getDecisions();
+  const body = !list.length
+    ? `<div class="holdings-empty">No journal entries yet. Click any meter and use the Buy / Sell / Hold buttons to log a decision.</div>`
+    : `<div class="journal-list">${list.map((e, idx) => {
+        const dirClass = e.direction === "buy" ? "buy" : e.direction === "sell" ? "sell" : "hold";
+        const when = new Date(e.date);
+        return `<div class="journal-entry">
+          <div class="head">
+            <span class="sym">${escapeHtml(e.sym)}</span>
+            <span class="dir ${dirClass}">${escapeHtml(e.direction.toUpperCase())}</span>
+            <span style="color:var(--muted); font-size:11px;">@ ${e.price !== null && e.price !== undefined ? "$" + fmt(e.price) : "—"}</span>
+            <span style="color:var(--muted); font-size:11px;">· ${escapeHtml(e.ratingLabel || "—")}${e.compositeScore !== null ? " (" + e.compositeScore + ")" : ""}</span>
+            <span class="when">${when.toLocaleDateString()} ${when.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
+          </div>
+          ${e.reason ? `<div class="reason">${escapeHtml(e.reason)}</div>` : `<div class="reason" style="color: var(--muted); font-style: italic;">(no reasoning recorded)</div>`}
+          <button class="del-entry" data-del-idx="${idx}">Delete</button>
+        </div>`;
+      }).join("")}</div>`;
+
+  openDrawer(`
+    <button class="close-x" data-close-drawer>&times;</button>
+    <h3>📓 Decision journal</h3>
+    <div class="drawer-sub">${list.length} entr${list.length === 1 ? "y" : "ies"}. Use these to review whether the meter's signal predicted outcomes.</div>
+    ${body}
+    <div class="drawer-actions">
+      <button data-close-drawer>Close</button>
+      ${list.length ? `<button id="exportJournalBtn">Export CSV</button>` : ""}
+    </div>
+  `);
+  document.querySelectorAll("[data-del-idx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.delIdx, 10);
+      const arr = getDecisions();
+      arr.splice(idx, 1);
+      setDecisions(arr);
+      openJournalViewer();
+    });
+  });
+  const exp = document.getElementById("exportJournalBtn");
+  if (exp) exp.addEventListener("click", () => {
+    const csv = "Date,Ticker,Direction,Price,Score,Rating,Reason\n" + getDecisions().map(e => {
+      return [e.date, e.sym, e.direction, e.price ?? "", e.compositeScore ?? "", e.ratingLabel ?? "", '"' + (e.reason || "").replace(/"/g, '""') + '"'].join(",");
+    }).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "stockwatcher-journal.csv";
+    a.click();
+  });
+}
+
+// =========================================================================
+// Portfolio rendering
+// =========================================================================
+
+function renderPortfolio() {
+  const holdings = getHoldings();
+  const panel = $("portfolioPanel");
+  if (!holdings.length) {
+    panel.classList.add("hidden");
+    $("portfolioNewsPanel").classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  $("portfolioEmpty").classList.add("hidden");
+
+  let totalValue = 0;
+  let totalCost = 0;
+  let totalDayChange = 0;
+  let hasAnyQuote = false;
+
+  const rows = holdings.map(h => {
+    const sym = h.sym.toUpperCase();
+    const r = rowState[sym];
+    const price = r && r.quote ? r.quote.c : null;
+    const dayPct = r && r.quote ? r.quote.dp : null;
+    const prevClose = r && r.quote ? r.quote.pc : null;
+    const shares = Number(h.shares) || 0;
+    const cost = Number(h.costBasis) || 0;
+    const mktValue = price !== null ? price * shares : null;
+    const costTotal = cost * shares;
+    const unrealized = mktValue !== null ? mktValue - costTotal : null;
+    const unrealizedPct = mktValue !== null && costTotal > 0 ? (unrealized / costTotal) * 100 : null;
+    const dayDollar = (price !== null && prevClose !== null) ? (price - prevClose) * shares : null;
+
+    if (mktValue !== null) { totalValue += mktValue; hasAnyQuote = true; }
+    totalCost += costTotal;
+    if (dayDollar !== null) totalDayChange += dayDollar;
+
+    const ratingHtml = r ? renderMeter(r.scores, { compact: true, dataSym: sym }) : `<span style="color:var(--muted); font-size:11px;">—</span>`;
+    const dayClass = dayPct === null ? "" : dayPct >= 0 ? "pos" : "neg";
+    const unrealClass = unrealized === null ? "" : unrealized >= 0 ? "pos" : "neg";
+
+    return `<tr>
+      <td><strong>${escapeHtml(sym)}</strong></td>
+      <td class="num">${fmt(shares, shares % 1 === 0 ? 0 : 4)}</td>
+      <td class="num">$${fmt(cost)}</td>
+      <td class="num">${price !== null ? "$" + fmt(price) : "—"}</td>
+      <td class="num ${dayClass}">${dayPct === null ? "—" : fmtPct(dayPct)}</td>
+      <td class="num">${mktValue !== null ? "$" + fmt(mktValue) : "—"}</td>
+      <td class="num ${unrealClass}">${unrealized === null ? "—" : (unrealized >= 0 ? "+" : "") + "$" + fmt(unrealized)}</td>
+      <td class="num ${unrealClass}">${unrealizedPct === null ? "—" : fmtPct(unrealizedPct)}</td>
+      <td>${ratingHtml}</td>
+    </tr>`;
+  }).join("");
+
+  $("portfolioBody2").innerHTML = rows;
+
+  const totalUnrealized = hasAnyQuote ? totalValue - totalCost : null;
+  const totalUnrealizedPct = (hasAnyQuote && totalCost > 0) ? (totalUnrealized / totalCost) * 100 : null;
+  const dayClass = totalDayChange >= 0 ? "pos" : "neg";
+  const unrealClass = totalUnrealized === null ? "" : totalUnrealized >= 0 ? "pos" : "neg";
+
+  $("portfolioSummary").innerHTML = `
+    <div class="stat"><div class="lbl">Total value</div><div class="val">${hasAnyQuote ? "$" + fmt(totalValue) : "—"}</div></div>
+    <div class="stat ${dayClass}"><div class="lbl">Today's change</div><div class="val">${hasAnyQuote ? (totalDayChange >= 0 ? "+" : "") + "$" + fmt(totalDayChange) : "—"}</div></div>
+    <div class="stat ${unrealClass}"><div class="lbl">Unrealized P&L</div><div class="val">${totalUnrealized === null ? "—" : (totalUnrealized >= 0 ? "+" : "") + "$" + fmt(totalUnrealized)}${totalUnrealizedPct !== null ? " <span style='font-size:12px; opacity:0.8;'>(" + fmtPct(totalUnrealizedPct) + ")</span>" : ""}</div></div>
+    <div class="stat"><div class="lbl">Positions</div><div class="val">${holdings.length}</div></div>
+    <div class="stat"><div class="lbl">Cost basis</div><div class="val">$${fmt(totalCost)}</div></div>
+  `;
+
+  // Wire up rating meter clicks inside portfolio
+  $("portfolioBody2").querySelectorAll(".meter-cell").forEach(el => {
+    el.addEventListener("click", () => openBreakdownDrawer(el.dataset.sym));
+  });
+}
+
+function renderPortfolioNews() {
+  const holdings = getHoldings();
+  const panel = $("portfolioNewsPanel");
+  if (!holdings.length || !allNews.length) {
+    panel.classList.add("hidden");
+    return;
+  }
+  const symSet = new Set(holdings.map(h => h.sym.toUpperCase()));
+  const items = allNews.filter(it => {
+    const tickers = (it.related || "").toUpperCase().split(",").map(s => s.trim());
+    return tickers.some(t => symSet.has(t));
+  }).slice(0, 12);
+
+  if (!items.length) {
+    panel.classList.remove("hidden");
+    $("portfolioNewsEmpty").classList.remove("hidden");
+    $("portfolioNewsGrid").innerHTML = "";
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  $("portfolioNewsEmpty").classList.add("hidden");
+  $("portfolioNewsGrid").innerHTML = items.map(it => {
+    const tickers = (it.related || "").split(",").map(s => s.trim().toUpperCase()).filter(s => TICKER_RE.test(s) && !TICKER_BLACKLIST.has(s) && symSet.has(s));
+    const img = it.image ? `<img class="news-img" src="${escapeHtml(it.image)}" loading="lazy" alt="" onerror="this.outerHTML='<div class=\\'news-img-fallback\\'>📰</div>'" />` : `<div class="news-img-fallback">📰</div>`;
+    const topic = it._topic || classifyTopic(it);
+    const meta = TOPIC_META[topic] || TOPIC_META.other;
+    return `<div class="news-card">
+      ${img}
+      <div class="news-body">
+        <div class="news-headline"><a href="${escapeHtml(it.url || "#")}" target="_blank" rel="noopener">${escapeHtml(it.headline || "Untitled")}</a></div>
+        <div class="news-meta">
+          <span class="topic-chip" style="color:${meta.color}; background:${meta.color}22;">${meta.label}</span>
+          <span>${escapeHtml(it.source || "Unknown")}</span> · <span>${relTime(it.datetime)}</span>
+        </div>
+        ${tickers.length ? `<div class="news-tickers">${tickers.slice(0, 6).map(t => `<span class="ticker-chip" data-ticker="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// Holdings editor (rendered inside Settings)
+function renderHoldingEditor() {
+  const holdings = getHoldings();
+  const ed = $("holdingEditor");
+  if (!ed) return;
+  ed.innerHTML = holdings.map((h, i) => `
+    <div class="holding-row" data-idx="${i}">
+      <input type="text" data-field="sym" value="${escapeHtml(h.sym || "")}" placeholder="AAPL" maxlength="10" />
+      <input type="number" data-field="shares" value="${escapeHtml(h.shares ?? "")}" placeholder="0" step="any" min="0" />
+      <input type="number" data-field="costBasis" value="${escapeHtml(h.costBasis ?? "")}" placeholder="0.00" step="any" min="0" />
+      <input type="date" data-field="purchaseDate" value="${escapeHtml(h.purchaseDate || "")}" />
+      <button type="button" class="del-btn" data-del="${i}" title="Remove">&times;</button>
+    </div>
+  `).join("");
+
+  ed.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const arr = getHoldings();
+      arr.splice(parseInt(btn.dataset.del, 10), 1);
+      setHoldings(arr);
+      renderHoldingEditor();
+    });
+  });
+}
+
+function readHoldingEditor() {
+  const rows = document.querySelectorAll("#holdingEditor .holding-row");
+  const out = [];
+  rows.forEach(row => {
+    const get = field => row.querySelector(`[data-field="${field}"]`).value.trim();
+    const sym = get("sym").toUpperCase();
+    if (!sym) return;
+    out.push({
+      sym,
+      shares: parseFloat(get("shares")) || 0,
+      costBasis: parseFloat(get("costBasis")) || 0,
+      purchaseDate: get("purchaseDate") || "",
+    });
+  });
+  return out;
+}
+
+// Topic filter chips above the news feed
+function renderTopicFilters() {
+  const row = $("topicFilterRow");
+  const topics = ["", "earnings", "ma", "regulatory", "analyst", "macro", "product", "other"];
+  row.innerHTML = topics.map(t => {
+    const meta = t === "" ? { label: "All topics", color: "var(--accent)" } : TOPIC_META[t];
+    const active = topicFilter === t ? "active" : "";
+    return `<span class="topic-filter ${active}" data-topic="${escapeHtml(t)}">${escapeHtml(meta.label)}</span>`;
+  }).join("");
+  row.querySelectorAll("[data-topic]").forEach(el => {
+    el.addEventListener("click", () => {
+      topicFilter = el.dataset.topic;
+      renderTopicFilters();
+      renderNewsFeed();
+    });
+  });
+}
+
+// =========================================================================
+// News feed rendering
+// =========================================================================
+
+function renderNewsFeed() {
+  if (!allNews.length) {
+    $("newsPanel").classList.add("hidden");
+    return;
+  }
+  $("newsPanel").classList.remove("hidden");
+
+  const filterText = newsFilter.trim().toLowerCase();
+  const tickerF = newsTickerFilter.trim().toUpperCase();
+
+  let items = allNews;
+  if (filterText) {
+    items = items.filter(it =>
+      (it.headline || "").toLowerCase().includes(filterText) ||
+      (it.summary || "").toLowerCase().includes(filterText) ||
+      (it.source || "").toLowerCase().includes(filterText) ||
+      (it.related || "").toLowerCase().includes(filterText)
+    );
+  }
+  if (tickerF) {
+    items = items.filter(it => (it.related || "").toUpperCase().split(",").map(s => s.trim()).includes(tickerF));
+  }
+  if (topicFilter) {
+    items = items.filter(it => (it._topic || classifyTopic(it)) === topicFilter);
+  }
+  if (holdingsOnly) {
+    const symSet = new Set(getHoldings().map(h => h.sym.toUpperCase()));
+    items = items.filter(it => {
+      const ts = (it.related || "").toUpperCase().split(",").map(s => s.trim());
+      return ts.some(t => symSet.has(t));
+    });
+  }
+
+  // Most recent first
+  items = items.slice().sort((a, b) => (b.datetime || 0) - (a.datetime || 0)).slice(0, MAX_NEWS_DISPLAY);
+
+  $("newsTotal").textContent = allNews.length;
+  $("newsShown").textContent = items.length;
+
+  // Update holdings-only chip state
+  const holdToggle = $("newsHoldingsToggle");
+  if (holdToggle) {
+    holdToggle.classList.toggle("active", holdingsOnly);
+    holdToggle.style.display = getHoldings().length ? "inline-block" : "none";
+  }
+
+  if (!items.length) {
+    $("newsGrid").innerHTML = "";
+    $("newsEmptyMsg").classList.remove("hidden");
+  } else {
+    $("newsEmptyMsg").classList.add("hidden");
+    $("newsGrid").innerHTML = items.map(it => {
+      const tickers = (it.related || "").split(",").map(s => s.trim().toUpperCase()).filter(s => TICKER_RE.test(s) && !TICKER_BLACKLIST.has(s));
+      const img = it.image ? `<img class="news-img" src="${escapeHtml(it.image)}" loading="lazy" alt="" onerror="this.outerHTML='<div class=\\'news-img-fallback\\'>📰</div>'" />` : `<div class="news-img-fallback">📰</div>`;
+      const topic = it._topic || classifyTopic(it);
+      const tmeta = TOPIC_META[topic] || TOPIC_META.other;
+      return `
+        <div class="news-card">
+          ${img}
+          <div class="news-body">
+            <div class="news-headline"><a href="${escapeHtml(it.url || "#")}" target="_blank" rel="noopener">${escapeHtml(it.headline || "Untitled")}</a></div>
+            <div class="news-meta">
+              <span class="topic-chip" style="color:${tmeta.color}; background:${tmeta.color}22;">${tmeta.label}</span>
+              <span>${escapeHtml(it.source || "Unknown")}</span> · <span>${relTime(it.datetime)}</span>
+            </div>
+            ${tickers.length ? `<div class="news-tickers">${tickers.slice(0, 8).map(t => `<span class="ticker-chip" data-ticker="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // Wire up ticker chip clicks
+    document.querySelectorAll("#newsGrid .ticker-chip").forEach(el => {
+      el.addEventListener("click", () => {
+        newsTickerFilter = el.dataset.ticker;
+        const chip = $("newsFilterChip");
+        chip.textContent = "Ticker: " + newsTickerFilter + " ✕";
+        chip.classList.remove("hidden");
+        chip.classList.add("active");
+        renderNewsFeed();
+      });
+    });
+  }
+}
+
+// =========================================================================
+// Loading flow
+// =========================================================================
+
+function setProgress(done, total, msg) {
+  const pct = total ? (done / total) * 100 : 0;
+  $("progressBar").style.width = pct + "%";
+  $("progressText").textContent = `${done} / ${total}`;
+  if (msg) $("statusText").textContent = msg;
+}
+
+function showError(msg) {
+  const b = $("errorBanner");
+  b.textContent = msg;
+  b.classList.remove("hidden");
+}
+function clearError() { $("errorBanner").classList.add("hidden"); }
+function showInfo(msg) {
+  const b = $("infoBanner");
+  b.innerHTML = msg;
+  b.classList.remove("hidden");
+}
+function clearInfo() { $("infoBanner").classList.add("hidden"); }
+
+async function loadAll() {
+  if (!getApiKey()) {
+    openSetup();
+    return;
+  }
+  clearError();
+  clearInfo();
+  $("loadingPanel").classList.remove("hidden");
+  $("resultsPanel").classList.remove("hidden");
+
+  rowState = {};
+  trendingMap = new Map();
+  rerenderTable();
+
+  let firstError = null;
+
+  // ----- Step 1: discover trending stocks via per-company news scan -----
+  // For each mega-cap candidate, pull its news from the past 7 days. Companies
+  // with the most articles are "trending" — they had a busy news week.
+  const totalCandidates = FULL_POOL.length;
+  setProgress(0, totalCandidates + 100, `Scanning news for ${totalCandidates} candidates (mega-cap + high-volatility)…`);
+  let trending = [];
+  let allItems = [];
+  try {
+    const result = await discoverTrendingFromCandidates(FULL_POOL, (i, total, sym) => {
+      setProgress(i, total + 100, `Scanning ${sym} news (${i}/${total})…`);
+    });
+    trending = result.trending;
+    allItems = result.allItems;
+    console.log("[StockWatcher] Trending discovery: " + trending.length + " candidates with news, top: " +
+      trending.slice(0, 5).map(t => `${t.sym}=${t.mentions}`).join(", "));
+  } catch (e) {
+    firstError = e;
+    console.error("[StockWatcher] Discovery failed:", e);
+  }
+  // Use aggregated company news as the news feed (better than /news?category=general
+  // which lacks ticker tags). Sort by datetime, dedupe by URL. Topic-classify each item.
+  const seen = new Set();
+  allNews = [];
+  for (const it of allItems.sort((a, b) => (b.datetime || 0) - (a.datetime || 0))) {
+    const key = it.url || (it.headline + "|" + it.datetime);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    it._topic = classifyTopic(it);
+    allNews.push(it);
+  }
+  $("newsCount").textContent = allNews.length;
+  renderTopicFilters();
+  renderNewsFeed();
+
+  // ----- Step 2: pick top N trending -----
+  trendingMap = new Map(trending.map(t => [t.sym, t]));
+  const numTrending = getNumTrending();
+  const topTrending = trending.slice(0, numTrending);
+
+  // ----- Step 3: merge with watchlist + holdings -----
+  const watchlist = getWatchlist();
+  const holdings = getHoldings();
+  const watchSet = new Set(watchlist.map(w => w.sym.toUpperCase()));
+  const holdSet = new Set(holdings.map(h => h.sym.toUpperCase()));
+  const trendSet = new Set(topTrending.map(t => t.sym));
+
+  const merged = []; // { sym, name, source, buzz }
+  const seenSyms = new Set();
+  const pushMerged = (sym, name, source, buzz) => {
+    if (seenSyms.has(sym)) return;
+    seenSyms.add(sym);
+    merged.push({ sym, name, source, buzz });
+  };
+  for (const t of topTrending) {
+    let source = "trending";
+    if (watchSet.has(t.sym) && holdSet.has(t.sym)) source = "both";
+    else if (holdSet.has(t.sym)) source = "both";
+    else if (watchSet.has(t.sym)) source = "both";
+    pushMerged(t.sym, "", source, t.mentions);
+  }
+  for (const w of watchlist) {
+    const sym = w.sym.toUpperCase();
+    pushMerged(sym, w.name || "", "watchlist", trendingMap.get(sym) ? trendingMap.get(sym).mentions : 0);
+  }
+  for (const h of holdings) {
+    const sym = h.sym.toUpperCase();
+    pushMerged(sym, "", "holding", trendingMap.get(sym) ? trendingMap.get(sym).mentions : 0);
+  }
+
+  // ----- Status banner: explain what happened with the news scan -----
+  if (trending.length === 0) {
+    showInfo("⚠️ <strong>News scan returned no items for any candidate.</strong> Could be a brand-new Finnhub key still activating, a network/CORS issue, or a temporary outage. Falling back to the candidate pool with no buzz scores.");
+  } else {
+    showInfo(`✅ Scanned <strong>${FULL_POOL.length}</strong> candidates (${CANDIDATE_POOL.length} mega-cap + ${HIGH_VOL_POOL.length} high-volatility) over past 7 days · found <strong>${trending.length}</strong> with news activity · tracking top <strong>${topTrending.length}</strong> + <strong>${allNews.length}</strong> articles${watchlist.length ? " · " + watchlist.length + " watchlist" : ""}.`);
+  }
+
+  // ----- Fallback: if we have nothing to show, use the big-cap list -----
+  if (!merged.length) {
+    for (const f of BIG_CAP_FALLBACK) {
+      merged.push({ sym: f.sym, name: f.name, source: "fallback", buzz: 0 });
+    }
+  }
+
+  $("tickerCount").textContent = merged.length;
+  if (!merged.length) {
+    $("loadingPanel").classList.add("hidden");
+    $("trendingPanel").classList.add("hidden");
+    showError("No tickers to track. This shouldn't happen — even fallback is empty. Try refreshing.");
+    return;
+  }
+
+  // Initialize rows
+  for (const m of merged) {
+    rowState[m.sym] = {
+      sym: m.sym,
+      name: m.name,
+      source: m.source,
+      buzz: m.buzz,
+      quote: null, metric: null, rec: null, sent: null, target: null,
+      earnings: null, insider: null,
+      targetUpside: null,
+      scores: { analyst: null, momentum: null, value: null, sentiment: null, composite: null },
+    };
+  }
+  rerenderTable();
+  renderPortfolio();
+  renderPortfolioNews();
+
+  // ----- Step 4: enrich each ticker -----
+  // quote + rec + metric + sent + target + profile + earnings + insider = 8 calls
+  const totalCalls = merged.length * 8;
+  let done = 1; // already did news fetch
+  setProgress(done, totalCalls, "Fetching live quotes…");
+
+  // Pass A: quotes (fast; user sees prices + portfolio P&L first)
+  for (const m of merged) {
+    try {
+      const q = await fetchQuote(m.sym);
+      rowState[m.sym].quote = q;
+    } catch (e) { if (!firstError) firstError = e; }
+    done++;
+    setProgress(done, totalCalls, `Quotes (${m.sym})`);
+    rerenderTable();
+    renderPortfolio();
+  }
+
+  // Pass B: enrichment per ticker
+  for (const m of merged) {
+    setProgress(done, totalCalls, `Enriching ${m.sym}…`);
+    try {
+      const [rec, metric, sent, target, profile, earnings, insider] = await Promise.all([
+        fetchRecommendation(m.sym).catch(() => null),
+        fetchMetric(m.sym).catch(() => null),
+        fetchNewsSentiment(m.sym),
+        fetchPriceTarget(m.sym),
+        m.name ? Promise.resolve(null) : fetchProfile(m.sym),
+        fetchEarningsCalendar(m.sym),
+        fetchInsiderTransactions(m.sym),
+      ]);
+      const row = rowState[m.sym];
+      row.rec = rec; row.metric = metric; row.sent = sent; row.target = target;
+      row.earnings = earnings; row.insider = insider;
+      if (profile && profile.name && !row.name) row.name = profile.name;
+      row.scores.analyst = scoreAnalyst(rec);
+      row.scores.momentum = scoreMomentum(row.quote, metric);
+      row.scores.value = scoreValue(metric);
+      row.scores.sentiment = scoreSentiment(sent);
+      row.scores.composite = compositeScore(row.scores);
+      row.targetUpside = targetUpside(row.quote, target);
+    } catch (e) {
+      if (!firstError) firstError = e;
+    }
+    done += 7;
+    setProgress(done, totalCalls);
+    rerenderTable();
+    renderPortfolio();
+  }
+
+  $("loadingPanel").classList.add("hidden");
+  $("updated").textContent = "Updated " + new Date().toLocaleString();
+  if (firstError) {
+    showError("Some data couldn't be fetched: " + firstError.message + ". Check your API key, rate limits, or network. Free Finnhub tier may not include every endpoint — the tool still works with partial data.");
+  }
+}
+
+// =========================================================================
+// Setup UI
+// =========================================================================
+
+function openSetup() {
+  $("apiKeyInput").value = getApiKey();
+  $("numTrendingInput").value = String(getNumTrending());
+  $("newsCategoryInput").value = getNewsCategory();
+  $("tickersInput").value = getWatchlist().map(t => t.name ? `${t.sym}:${t.name}` : t.sym).join(", ");
+  renderHoldingEditor();
+  $("setup").classList.remove("hidden");
+}
+function closeSetup() { $("setup").classList.add("hidden"); }
+
+function parseTickers(raw) {
+  return raw.split(/[,\n]/).map(s => s.trim()).filter(Boolean).map(piece => {
+    const [sym, ...rest] = piece.split(":").map(s => s.trim());
+    return { sym: sym.toUpperCase(), name: rest.length ? rest.join(":") : "" };
+  });
+}
+
+$("settingsBtn").addEventListener("click", openSetup);
+$("cancelSetupBtn").addEventListener("click", closeSetup);
+$("clearWatchBtn").addEventListener("click", () => { $("tickersInput").value = ""; });
+$("saveBtn").addEventListener("click", () => {
+  const key = $("apiKeyInput").value.trim();
+  if (!key) { alert("Please enter your Finnhub API key."); return; }
+  setApiKey(key);
+  setNumTrending(parseInt($("numTrendingInput").value, 10) || 10);
+  setNewsCategory($("newsCategoryInput").value || "general");
+  const list = parseTickers($("tickersInput").value);
+  setWatchlist(list);
+  setHoldings(readHoldingEditor());
+  closeSetup();
+  loadAll();
+});
+
+// Holdings: add a new blank row, journal & portfolio buttons
+$("addHoldingBtn").addEventListener("click", () => {
+  const arr = readHoldingEditor();
+  arr.push({ sym: "", shares: 0, costBasis: 0, purchaseDate: "" });
+  setHoldings(arr);
+  renderHoldingEditor();
+  // Focus the new ticker input
+  setTimeout(() => {
+    const inputs = document.querySelectorAll("#holdingEditor .holding-row input[data-field='sym']");
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 0);
+});
+
+$("journalBtn").addEventListener("click", openJournalViewer);
+
+$("togglePortfolioBtn").addEventListener("click", () => {
+  const body = $("portfolioBody");
+  const hidden = body.classList.toggle("hidden");
+  $("togglePortfolioBtn").textContent = hidden ? "Show" : "Hide";
+});
+
+$("openSetupFromEmpty").addEventListener("click", (e) => {
+  e.preventDefault();
+  openSetup();
+});
+
+$("newsHoldingsToggle").addEventListener("click", () => {
+  holdingsOnly = !holdingsOnly;
+  renderNewsFeed();
+});
+
+// Prospect tab clicks
+document.querySelectorAll(".tab-btn[data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    prospectTab = btn.dataset.tab;
+    renderTrending();
+  });
+});
+
+$("refreshBtn").addEventListener("click", () => {
+  // Clear quote + news cache (keep deeper cache for speed)
+  const c = loadCache();
+  for (const sym of Object.keys(c)) {
+    if (c[sym].quote) delete c[sym].quote;
+    if (sym.startsWith("_news_")) delete c[sym];
+  }
+  saveCache(c);
+  loadAll();
+});
+
+document.querySelectorAll("thead th").forEach(th => {
+  th.addEventListener("click", () => {
+    const key = th.dataset.sort;
+    if (!key) return;
+    if (sortKey === key) {
+      sortDir = sortDir === "asc" ? "desc" : "asc";
+    } else {
+      sortKey = key;
+      sortDir = (key === "symbol" || key === "name" || key === "source") ? "asc" : "desc";
+    }
+    rerenderTable();
+  });
+});
+
+// News filter
+$("newsSearch").addEventListener("input", (e) => {
+  newsFilter = e.target.value;
+  renderNewsFeed();
+});
+$("newsFilterChip").addEventListener("click", () => {
+  newsTickerFilter = "";
+  $("newsFilterChip").classList.add("hidden");
+  renderNewsFeed();
+});
+
+// Quant snapshot toggle
+$("toggleQuantBtn").addEventListener("click", () => {
+  const body = $("quantBody");
+  const hidden = body.classList.toggle("hidden");
+  $("toggleQuantBtn").textContent = hidden ? "Show details" : "Hide details";
+});
+
+// =========================================================================
+// Login gate — Web Crypto decryption of the embedded API key
+// =========================================================================
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return bytes;
+}
+
+async function deriveAesKey(secret, saltBytes) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), "PBKDF2", false, ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: saltBytes, iterations: 200000, hash: "SHA-256" },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+}
+
+async function decryptApiKey(username, password) {
+  const secret = username + ":" + password;
+  const salt = hexToBytes(ENCRYPTED_KEY.salt);
+  const iv = hexToBytes(ENCRYPTED_KEY.iv);
+  const blob = hexToBytes(ENCRYPTED_KEY.blob);
+  const key = await deriveAesKey(secret, salt);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    blob
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
+function unlockApp(decryptedKey) {
+  setApiKey(decryptedKey);
+  document.body.classList.remove("locked");
+  document.getElementById("loginGate").remove();
+  loadAll();
+}
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = document.getElementById("loginUser").value.trim();
+  const password = document.getElementById("loginPass").value;
+  const errorEl = document.getElementById("loginError");
+  const statusEl = document.getElementById("loginStatus");
+  const btn = document.getElementById("loginBtn");
+  errorEl.textContent = "";
+  statusEl.textContent = "Verifying… (PBKDF2 takes a moment)";
+  btn.disabled = true;
+  try {
+    const apiKey = await decryptApiKey(username, password);
+    statusEl.textContent = "✓ Unlocked.";
+    setTimeout(() => unlockApp(apiKey), 200);
+  } catch (err) {
+    errorEl.textContent = "Invalid username or password.";
+    statusEl.textContent = "";
+    btn.disabled = false;
+    document.getElementById("loginPass").select();
+  }
+});
+
+// Boot — login gate handles app entry. If a key is already in sessionStorage
+// (e.g. from an earlier login this tab), skip the gate.
+window.addEventListener("DOMContentLoaded", () => {
+  if (getApiKey()) {
+    document.body.classList.remove("locked");
+    const gate = document.getElementById("loginGate");
+    if (gate) gate.remove();
+    loadAll();
+  }
+  // Otherwise the gate stays up; user must log in.
+});
+</script>
+</body>
+</html>
